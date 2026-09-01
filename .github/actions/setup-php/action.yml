@@ -1,0 +1,27 @@
+name: Setup PHP
+description: Setup PHP with Composer dependency caching
+
+inputs:
+  php-version:
+    description: PHP version to use
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: 🐘 Set up PHP ${{ inputs.php-version }}
+      uses: shivammathur/setup-php@v2
+      with:
+        php-version: ${{ inputs.php-version }}
+        tools: composer
+
+    - name: 📦 Cache Composer packages
+      uses: actions/cache@v4
+      with:
+        path: vendor
+        key: composer-${{ runner.os }}-${{ inputs.php-version }}-${{ hashFiles('composer.lock') }}
+        restore-keys: composer-${{ runner.os }}-${{ inputs.php-version }}-
+
+    - name: ⚙️ Install dependencies
+      shell: bash
+      run: composer install --no-interaction --prefer-dist
