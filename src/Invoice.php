@@ -58,6 +58,8 @@ final class Invoice
         string $taxId,
         array $items,
         ?Address $recipientAddress = null,
+        ?string $series = null,
+        ?string $number = null,
     ): array {
         if ($items === []) {
             throw new InvoiceError("items can't be empty");
@@ -82,6 +84,12 @@ final class Invoice
         ];
         if ($recipientAddress !== null) {
             $payload['recipient_address'] = $recipientAddress->toArray();
+        }
+        if ($series !== null) {
+            $payload['series'] = $series;
+        }
+        if ($number !== null) {
+            $payload['number'] = $number;
         }
 
         return $this->request('POST', '/invoices', json: $payload);
