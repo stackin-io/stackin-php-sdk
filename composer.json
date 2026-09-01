@@ -1,0 +1,31 @@
+{
+    "name": "stackin-io/stackin-php-sdk",
+    "description": "Official PHP SDK for the stackin fiscal document API — issue, consult, cancel NF-e and NFS-e.",
+    "type": "library",
+    "license": "MIT",
+    "homepage": "https://docs.stackin.io",
+    "require": {
+        "php": ">=8.1",
+        "guzzlehttp/guzzle": "^7.8"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^10.5",
+        "squizlabs/php_codesniffer": "^3.9",
+        "phpstan/phpstan": "^1.11"
+    },
+    "autoload": {
+        "psr-4": {
+            "Stackin\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Stackin\\Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "test": "phpunit tests",
+        "lint": "phpcs --standard=.code_quality/phpcs.xml",
+        "analyse": "phpstan analyse -c .code_quality/phpstan.neon"
+    }
+}

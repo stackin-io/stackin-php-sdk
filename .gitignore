@@ -12,6 +12,11 @@ dist/
 # Go
 /bin/
 
+# PHP
+/vendor/
+vendor/
+composer.phar
+
 # Node
 node_modules/
 npm-debug.log*
