@@ -4,6 +4,22 @@
     "type": "library",
     "license": "MIT",
     "homepage": "https://docs.stackin.io",
+    "keywords": [
+        "nfe",
+        "nfse",
+        "nota-fiscal",
+        "nota-fiscal-eletronica",
+        "invoice",
+        "fiscal-document",
+        "brazil",
+        "sefaz",
+        "e-invoicing"
+    ],
+    "support": {
+        "issues": "https://github.com/stackin-io/stackin-php-sdk/issues",
+        "source": "https://github.com/stackin-io/stackin-php-sdk",
+        "docs": "https://docs.stackin.io/blog/php-sdk"
+    },
     "require": {
         "php": ">=8.1",
         "guzzlehttp/guzzle": "^7.8"
