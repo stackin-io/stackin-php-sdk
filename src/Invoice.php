@@ -80,8 +80,8 @@ final class Invoice
             'tax_id' => $taxId,
             'items' => array_map(static fn (Product $item): array => $item->toArray(), $items),
         ];
-        if ($recipientAddress?->state) {
-            $payload['recipient_state'] = $recipientAddress->state;
+        if ($recipientAddress !== null) {
+            $payload['recipient_address'] = $recipientAddress->toArray();
         }
 
         return $this->request('POST', '/invoices', json: $payload);

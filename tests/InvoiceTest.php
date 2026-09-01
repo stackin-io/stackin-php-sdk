@@ -155,10 +155,11 @@ final class InvoiceTest extends TestCase
             'Acme',
             '123',
             [new Product(description: 'Widget', amount: 10.0, ncm: '12345678', cfop: '5102')],
-            new Address(state: 'SC'),
+            new Address(state: 'SC', cityCode: '4205407'),
         );
 
         $body = json_decode((string) $mock->getLastRequest()->getBody(), true);
-        $this->assertSame('SC', $body['recipient_state']);
+        $this->assertSame('SC', $body['recipient_address']['state']);
+        $this->assertSame('4205407', $body['recipient_address']['city_code']);
     }
 }

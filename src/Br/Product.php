@@ -43,6 +43,10 @@ final class Product
         public readonly ?array $extraGroups = null,
         /** @var array<string, mixed>|null */
         public readonly ?array $tax = null,
+        public readonly ?string $serviceCode = null,
+        public readonly ?float $serviceDiscount = null,
+        public readonly bool $taxRetained = false,
+        public readonly ?string $observations = null,
     ) {
     }
 
@@ -95,10 +99,19 @@ final class Product
             $data['br'] = $br;
         }
 
-        return [
-            'description' => $this->description,
-            'amount' => $this->amount,
-            'product' => $data,
-        ];
+        $result = array_filter(
+            [
+                'description' => $this->description,
+                'amount' => $this->amount,
+                'product' => $data,
+                'service_code' => $this->serviceCode,
+                'discount' => $this->serviceDiscount,
+                'observations' => $this->observations,
+            ],
+            static fn (mixed $value): bool => $value !== null,
+        );
+        $result['tax_retained'] = $this->taxRetained;
+
+        return $result;
     }
 }
