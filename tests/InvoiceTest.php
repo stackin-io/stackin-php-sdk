@@ -162,4 +162,105 @@ final class InvoiceTest extends TestCase
         $this->assertSame('SC', $body['recipient_address']['state']);
         $this->assertSame('4205407', $body['recipient_address']['city_code']);
     }
+
+    public function testIssueIncludesSeriesAndNumber(): void
+    {
+        $mock = new MockHandler([
+            new Response(200, ['Content-Type' => 'application/json'], (string) json_encode([
+                'result' => [],
+            ])),
+        ]);
+        $invoice = new Invoice(apiKey: 'key', baseUrl: 'https://example.com');
+        $this->injectMockHttpClient($invoice, $mock);
+
+        $invoice->issue(
+            DocumentType::NFSE,
+            'Acme',
+            '123',
+            [new Product(description: 'Servico', amount: 10.0)],
+            series: '1',
+            number: '42',
+        );
+
+        $body = json_decode((string) $mock->getLastRequest()->getBody(), true);
+        $this->assertSame('1', $body['series']);
+        $this->assertSame('42', $body['number']);
+    }
+
+    public function testResolveBaseUrlUsesEnvVar(): void
+    {
+        putenv('STACKIN_BASE_URL=http://env-url:9000');
+        $invoice = new Invoice(apiKey: 'key');
+
+        $property = new ReflectionProperty(Invoice::class, 'baseUrl');
+        $property->setAccessible(true);
+
+        try {
+            $this->assertSame('http://env-url:9000', $property->getValue($invoice));
+        } finally {
+            putenv('STACKIN_BASE_URL');
+        }
+    }
+
+    public function testRequestReturnsFullBodyWhenNoResultKey(): void
+    {
+        $mock = new MockHandler([
+            new Response(200, ['Content-Type' => 'application/json'], (string) json_encode([
+                'status' => 'ok',
+            ])),
+        ]);
+        $invoice = new Invoice(apiKey: 'key', baseUrl: 'https://example.com');
+        $this->injectMockHttpClient($invoice, $mock);
+
+        $result = $invoice->consult('abc123', DocumentType::NFE);
+
+        $this->assertSame(['status' => 'ok'], $result);
+    }
+
+    public function testRequestHandlesEmptyResponseBody(): void
+    {
+        $mock = new MockHandler([new Response(200)]);
+        $invoice = new Invoice(apiKey: 'key', baseUrl: 'https://example.com');
+        $this->injectMockHttpClient($invoice, $mock);
+
+        $result = $invoice->consult('abc123', DocumentType::NFE);
+
+        $this->assertSame([], $result);
+    }
+
+    public function testRequestApiErrorFallsBackToResponseTextWithoutDetail(): void
+    {
+        $mock = new MockHandler([
+            new Response(500, [], 'internal error'),
+        ]);
+        $invoice = new Invoice(apiKey: 'key', baseUrl: 'https://example.com');
+        $this->injectMockHttpClient($invoice, $mock);
+
+        try {
+            $invoice->consult('abc123', DocumentType::NFE);
+            $this->fail('Expected ApiError');
+        } catch (ApiError $error) {
+            $this->assertSame(500, $error->statusCode);
+            $this->assertSame('internal error', $error->detail);
+        }
+    }
+
+    public function testRequestApiErrorJsonEncodesNonStringDetail(): void
+    {
+        $mock = new MockHandler([
+            new Response(400, ['Content-Type' => 'application/json'], json_encode([
+                'detail' => ['tax_id is invalid', 'cfop is invalid'],
+            ])),
+        ]);
+        $invoice = new Invoice(apiKey: 'key', baseUrl: 'https://example.com');
+        $this->injectMockHttpClient($invoice, $mock);
+
+        try {
+            $invoice->consult('abc123', DocumentType::NFE);
+            $this->fail('Expected ApiError');
+        } catch (ApiError $error) {
+            $this->assertSame(400, $error->statusCode);
+            $this->assertSame('["tax_id is invalid","cfop is invalid"]', $error->detail);
+        }
+    }
 }
