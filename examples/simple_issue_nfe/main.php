@@ -12,12 +12,12 @@ use Stackin\Errors\ConnectionFailedError;
 use Stackin\Errors\InvoiceError;
 use Stackin\Invoice;
 
-$invoice = new Invoice(apiKey: getenv('STACKIN_API_KEY') ?: null);
+$invoice = new Invoice(apiKey: getenv('NFE_TEST_API_KEY') ?: null);
 
 try {
     $result = $invoice->issue(
         DocumentType::NFE,
-        'Buyer Company Ltd',
+        'Comprador Teste Ltda',
         '11222333000181',
         [
             new Product(
@@ -27,7 +27,15 @@ try {
                 cfop: '5102',
             ),
         ],
-        new Address(state: 'SC'),
+        new Address(
+            street: 'Rua das Palmeiras',
+            number: '100',
+            neighborhood: 'Centro',
+            city: 'Florianopolis',
+            state: 'SC',
+            zipCode: '88010000',
+            cityCode: '4205407',
+        ),
     );
 
     echo "Issued: {$result['access_key']} ({$result['status']})\n";
