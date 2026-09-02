@@ -141,6 +141,42 @@ final class InvoiceTest extends TestCase
         $this->assertSame('nfse', $body['document_type']);
     }
 
+    public function testReissueSendsPostToReissuePath(): void
+    {
+        $mock = new MockHandler([
+            new Response(200, ['Content-Type' => 'application/json'], (string) json_encode([
+                'access_key' => 'reissued-key',
+            ])),
+        ]);
+        $invoice = new Invoice(apiKey: 'key', baseUrl: 'https://example.com');
+        $this->injectMockHttpClient($invoice, $mock);
+
+        $result = $invoice->reissue('inv-1');
+
+        $request = $mock->getLastRequest();
+        $this->assertSame('POST', $request->getMethod());
+        $this->assertSame('/api/v1/invoices/inv-1/reissue', $request->getUri()->getPath());
+        $this->assertSame('reissued-key', $result['access_key']);
+    }
+
+    public function testReissueReturnsApiErrorOnNon2xx(): void
+    {
+        $mock = new MockHandler([
+            new Response(404, ['Content-Type' => 'application/json'], (string) json_encode([
+                'detail' => 'invoice not found',
+            ])),
+        ]);
+        $invoice = new Invoice(apiKey: 'key', baseUrl: 'https://example.com');
+        $this->injectMockHttpClient($invoice, $mock);
+
+        try {
+            $invoice->reissue('inv-missing');
+            $this->fail('Expected ApiError');
+        } catch (ApiError $error) {
+            $this->assertSame(404, $error->statusCode);
+        }
+    }
+
     public function testAddressStateSetsRecipientState(): void
     {
         $body = json_encode(['result' => []]);

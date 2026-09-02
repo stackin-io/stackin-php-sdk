@@ -125,6 +125,16 @@ final class Invoice
     }
 
     /**
+     * Retries a previous invoice submission by its local id.
+     *
+     * @return array<string, mixed>
+     */
+    public function reissue(string $invoiceId): array
+    {
+        return $this->request('POST', "/invoices/{$invoiceId}/reissue");
+    }
+
+    /**
      * @param array<string, mixed>|null $json
      * @param array<string, mixed>|null $query
      * @return array<string, mixed>
