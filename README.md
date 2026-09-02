@@ -66,6 +66,6 @@ Building the full fiscal document (issuer data, service code, tax groups, schema
 
 ## Examples
 
-Runnable end-to-end scripts in [`examples/`](examples/) — `simple_issue_nfe` and `simple_issue_nfse`, each with a catalog of realistic line items covering every optional field.
+Runnable end-to-end scripts in [`examples/nfe/`](examples/nfe/) and [`examples/nfse/`](examples/nfse/) — one script per field variant, from the bare minimum to every field filled.
 
 Commit convention lives in [`CONTRIBUTING.md`](CONTRIBUTING.md), not here.
