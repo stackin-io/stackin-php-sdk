@@ -50,17 +50,25 @@ $result = $invoice->issue(
             cfop: '5102',
         ),
     ],
-    new Address(state: 'SC'),
+    new Address(
+        street: 'Rua das Palmeiras',
+        number: '100',
+        neighborhood: 'Centro',
+        city: 'Florianopolis',
+        state: 'SC',
+        zipCode: '88010000',
+        cityCode: '4205407',
+    ),
 );
 ```
 
-The recipient `Address` passed as `issue()`'s last argument is, despite the name, only read for `.state` — the rest of the fields aren't sent anywhere yet. It's the actual customer's state, used only to set `idDest` (interstate vs internal) on NFE — optional, omitting it always produces `idDest=1` (internal).
+The recipient `Address` passed to `issue()` is the buyer's address — **required for NFE** and ignored for NFSE. Every field is required, `cityCode` (the 7-digit IBGE municipality code) included: it becomes `enderDest` on the wire and the SEFAZ rejects a partial one. `state` is also what resolves `idDest` — a buyer in another state is emitted as an interstate operation automatically. A missing or incomplete address throws an `InvoiceError` locally, before the request goes out.
 
 ## Errors
 
 - `Stackin\Errors\ApiError` — the API responded with a non-2xx status (`statusCode`/`detail` properties) — a 401 here means `api_key` is missing, wrong, or was rotated.
 - `Stackin\Errors\ConnectionFailedError` — the API didn't respond (network/DNS/timeout).
-- `Stackin\Errors\InvoiceError` — `issue()`'s items is empty, or missing `ncm`/`cfop` on an item for NFE.
+- `Stackin\Errors\InvoiceError` — `issue()`'s items is empty, missing `ncm`/`cfop` on an item for NFE, or a missing/incomplete recipient `Address` on NFE.
 
 Building the full fiscal document (issuer data, service code, tax groups, schema-accurate XML) is the API's job — configured once per company, not passed on every call.
 
