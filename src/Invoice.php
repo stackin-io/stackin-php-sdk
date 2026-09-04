@@ -81,6 +81,9 @@ final class Invoice
     /**
      * Issues a fiscal document.
      *
+     * Pass $idempotencyKey to make a retry safe: the same key with the same
+     * body replays the first response instead of issuing a second document.
+     *
      * @param Product[] $items
      * @return array<string, mixed>
      */
@@ -92,6 +95,7 @@ final class Invoice
         ?Address $recipientAddress = null,
         ?string $series = null,
         ?string $number = null,
+        ?string $idempotencyKey = null,
     ): array {
         if ($items === []) {
             throw new InvoiceError("items can't be empty");
@@ -125,7 +129,12 @@ final class Invoice
             $payload['number'] = $number;
         }
 
-        return $this->request('POST', '/invoices', json: $payload);
+        return $this->request(
+            'POST',
+            '/invoices',
+            json: $payload,
+            idempotencyKey: $idempotencyKey,
+        );
     }
 
     /**
@@ -162,9 +171,13 @@ final class Invoice
      *
      * @return array<string, mixed>
      */
-    public function reissue(string $invoiceId): array
+    public function reissue(string $invoiceId, ?string $idempotencyKey = null): array
     {
-        return $this->request('POST', "/invoices/{$invoiceId}/reissue");
+        return $this->request(
+            'POST',
+            "/invoices/{$invoiceId}/reissue",
+            idempotencyKey: $idempotencyKey,
+        );
     }
 
     /**
@@ -177,6 +190,7 @@ final class Invoice
         string $path,
         ?array $json = null,
         ?array $query = null,
+        ?string $idempotencyKey = null,
     ): array {
         $url = "{$this->baseUrl}/api/v1{$path}";
         $options = [];
@@ -186,8 +200,15 @@ final class Invoice
         if ($query !== null) {
             $options['query'] = $query;
         }
+        $headers = [];
         if ($this->apiKey) {
-            $options['headers'] = ['Authorization' => "Bearer {$this->apiKey}"];
+            $headers['Authorization'] = "Bearer {$this->apiKey}";
+        }
+        if ($idempotencyKey !== null) {
+            $headers['Idempotency-Key'] = $idempotencyKey;
+        }
+        if ($headers !== []) {
+            $options['headers'] = $headers;
         }
 
         try {
