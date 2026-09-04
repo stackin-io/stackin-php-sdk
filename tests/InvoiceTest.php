@@ -242,6 +242,52 @@ final class InvoiceTest extends TestCase
         $this->assertSame('idem-2', $request->getHeaderLine('Idempotency-Key'));
     }
 
+    public function testInvalidatePostsToTheInvalidationsPath(): void
+    {
+        $mock = new MockHandler([
+            new Response(200, ['Content-Type' => 'application/json'], (string) json_encode([
+                'id' => 'range-1',
+                'status' => 'invalidated',
+            ])),
+        ]);
+        $invoice = new Invoice(apiKey: 'key', baseUrl: 'https://example.com');
+        $this->injectMockHttpClient($invoice, $mock);
+
+        $result = $invoice->invalidate(
+            '1',
+            10,
+            12,
+            'Numeracao reservada e nao utilizada por falha no ERP',
+        );
+
+        $request = $mock->getLastRequest();
+        $this->assertSame('POST', $request->getMethod());
+        $this->assertSame('/api/v1/invoices/invalidations', $request->getUri()->getPath());
+        $this->assertSame([
+            'series' => '1',
+            'number_start' => 10,
+            'number_end' => 12,
+            'reason' => 'Numeracao reservada e nao utilizada por falha no ERP',
+        ], json_decode((string) $request->getBody(), true));
+        $this->assertSame('invalidated', $result['status']);
+    }
+
+    public function testInvalidateRejectsAReasonOutsideTheAllowedLength(): void
+    {
+        $invoice = new Invoice(apiKey: 'key', baseUrl: 'https://example.com');
+
+        $this->expectException(InvoiceError::class);
+        $invoice->invalidate('1', 10, 12, 'curto');
+    }
+
+    public function testInvalidateRejectsABackwardsRange(): void
+    {
+        $invoice = new Invoice(apiKey: 'key', baseUrl: 'https://example.com');
+
+        $this->expectException(InvoiceError::class);
+        $invoice->invalidate('1', 12, 10, 'Numeracao reservada e nao utilizada');
+    }
+
     public function testCorrectPostsToTheCorrectionPath(): void
     {
         $mock = new MockHandler([
