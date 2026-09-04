@@ -167,6 +167,29 @@ final class Invoice
     }
 
     /**
+     * Files a correction letter (CC-e) against an issued document.
+     *
+     * @return array<string, mixed>
+     */
+    public function correct(
+        string $accessKey,
+        DocumentType $documentType,
+        string $correction,
+    ): array {
+        $length = mb_strlen($correction);
+        if ($length < 15 || $length > 1000) {
+            throw new InvoiceError('correction must be 15 to 1000 characters');
+        }
+
+        $payload = [
+            'document_type' => $documentType->value,
+            'correction' => $correction,
+        ];
+
+        return $this->request('POST', "/invoices/{$accessKey}/correction", json: $payload);
+    }
+
+    /**
      * Retries a previous invoice submission by its local id.
      *
      * @return array<string, mixed>
