@@ -47,6 +47,38 @@ final class Invoice
     }
 
     /**
+     * Rejects a missing or partial buyer address before the network call —
+     * the SEFAZ rejects a partial enderDest (274/726/696/695).
+     */
+    private static function validateNfeAddress(?Address $address): void
+    {
+        if ($address === null) {
+            throw new InvoiceError('recipientAddress is required for NFE');
+        }
+
+        $fields = [
+            'street' => $address->street,
+            'number' => $address->number,
+            'neighborhood' => $address->neighborhood,
+            'city' => $address->city,
+            'state' => $address->state,
+            'zipCode' => $address->zipCode,
+            'cityCode' => $address->cityCode,
+        ];
+
+        $missing = array_keys(array_filter(
+            $fields,
+            static fn (?string $value): bool => $value === null || $value === '',
+        ));
+
+        if ($missing !== []) {
+            throw new InvoiceError(
+                'recipientAddress is missing required fields for NFE: ' . implode(', ', $missing),
+            );
+        }
+    }
+
+    /**
      * Issues a fiscal document.
      *
      * @param Product[] $items
@@ -74,6 +106,7 @@ final class Invoice
                     throw new InvoiceError("items[{$index}].cfop is required for NFE");
                 }
             }
+            self::validateNfeAddress($recipientAddress);
         }
 
         $payload = [
