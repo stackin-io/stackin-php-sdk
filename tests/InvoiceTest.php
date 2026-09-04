@@ -159,6 +159,89 @@ final class InvoiceTest extends TestCase
         $this->assertSame('nfse', $body['document_type']);
     }
 
+    public function testIssueSendsIdempotencyKeyHeaderWhenGiven(): void
+    {
+        $mock = new MockHandler([
+            new Response(200, ['Content-Type' => 'application/json'], (string) json_encode([
+                'result' => ['access_key' => 'abc123'],
+            ])),
+        ]);
+        $invoice = new Invoice(apiKey: 'key', baseUrl: 'https://example.com');
+        $this->injectMockHttpClient($invoice, $mock);
+
+        $invoice->issue(
+            DocumentType::NFSE,
+            'Acme',
+            '123',
+            [new Product(description: 'Widget', amount: 10.0)],
+            idempotencyKey: 'idem-1',
+        );
+
+        $request = $mock->getLastRequest();
+        $this->assertSame('idem-1', $request->getHeaderLine('Idempotency-Key'));
+        $this->assertSame('Bearer key', $request->getHeaderLine('Authorization'));
+    }
+
+    public function testIssueOmitsIdempotencyKeyHeaderByDefault(): void
+    {
+        $mock = new MockHandler([
+            new Response(200, ['Content-Type' => 'application/json'], (string) json_encode([
+                'result' => ['access_key' => 'abc123'],
+            ])),
+        ]);
+        $invoice = new Invoice(apiKey: 'key', baseUrl: 'https://example.com');
+        $this->injectMockHttpClient($invoice, $mock);
+
+        $invoice->issue(
+            DocumentType::NFSE,
+            'Acme',
+            '123',
+            [new Product(description: 'Widget', amount: 10.0)],
+        );
+
+        $request = $mock->getLastRequest();
+        $this->assertFalse($request->hasHeader('Idempotency-Key'));
+    }
+
+    public function testIssueKeepsIdempotencyKeyOutOfTheBody(): void
+    {
+        $mock = new MockHandler([
+            new Response(200, ['Content-Type' => 'application/json'], (string) json_encode([
+                'result' => ['access_key' => 'abc123'],
+            ])),
+        ]);
+        $invoice = new Invoice(apiKey: 'key', baseUrl: 'https://example.com');
+        $this->injectMockHttpClient($invoice, $mock);
+
+        $invoice->issue(
+            DocumentType::NFSE,
+            'Acme',
+            '123',
+            [new Product(description: 'Widget', amount: 10.0)],
+            idempotencyKey: 'idem-1',
+        );
+
+        $body = json_decode((string) $mock->getLastRequest()->getBody(), true);
+        $this->assertArrayNotHasKey('idempotency_key', $body);
+        $this->assertArrayNotHasKey('idempotencyKey', $body);
+    }
+
+    public function testReissueSendsIdempotencyKeyHeaderWhenGiven(): void
+    {
+        $mock = new MockHandler([
+            new Response(200, ['Content-Type' => 'application/json'], (string) json_encode([
+                'access_key' => 'reissued-key',
+            ])),
+        ]);
+        $invoice = new Invoice(apiKey: 'key', baseUrl: 'https://example.com');
+        $this->injectMockHttpClient($invoice, $mock);
+
+        $invoice->reissue('inv-1', idempotencyKey: 'idem-2');
+
+        $request = $mock->getLastRequest();
+        $this->assertSame('idem-2', $request->getHeaderLine('Idempotency-Key'));
+    }
+
     public function testReissueSendsPostToReissuePath(): void
     {
         $mock = new MockHandler([
