@@ -167,6 +167,35 @@ final class Invoice
     }
 
     /**
+     * Reports a reserved but never used NFE numbering range.
+     *
+     * @return array<string, mixed>
+     */
+    public function invalidate(
+        string $series,
+        int $numberStart,
+        int $numberEnd,
+        string $reason,
+    ): array {
+        $length = mb_strlen($reason);
+        if ($length < 15 || $length > 255) {
+            throw new InvoiceError('reason must be 15 to 255 characters');
+        }
+        if ($numberEnd < $numberStart) {
+            throw new InvoiceError("numberEnd can't be below numberStart");
+        }
+
+        $payload = [
+            'series' => $series,
+            'number_start' => $numberStart,
+            'number_end' => $numberEnd,
+            'reason' => $reason,
+        ];
+
+        return $this->request('POST', '/invoices/invalidations', json: $payload);
+    }
+
+    /**
      * Files a correction letter (CC-e) against an issued document.
      *
      * @return array<string, mixed>
