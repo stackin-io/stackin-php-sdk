@@ -30,6 +30,23 @@ final class InvoiceTest extends TestCase
         $property->setValue($invoice, $httpClient);
     }
 
+    /**
+     * The buyer address NFE issuance requires — every field filled, so tests
+     * exercising something other than address validation can pass it through.
+     */
+    private function validNfeAddress(): Address
+    {
+        return new Address(
+            state: 'SC',
+            cityCode: '4209102',
+            street: 'Rua das Flores',
+            number: '1200',
+            neighborhood: 'Centro',
+            city: 'Joinville',
+            zipCode: '89201100',
+        );
+    }
+
     public function testDefaultsToSdkHost(): void
     {
         putenv('STACKIN_BASE_URL');
@@ -87,6 +104,7 @@ final class InvoiceTest extends TestCase
             'Acme',
             '123',
             [new Product(description: 'Widget', amount: 10.0, ncm: '12345678', cfop: '5102')],
+            $this->validNfeAddress(),
         );
 
         $request = $mock->getLastRequest();
@@ -177,7 +195,7 @@ final class InvoiceTest extends TestCase
         }
     }
 
-    public function testAddressStateSetsRecipientState(): void
+    public function testAddressIsSentAsRecipientAddress(): void
     {
         $body = json_encode(['result' => []]);
         $mock = new MockHandler([
@@ -191,12 +209,61 @@ final class InvoiceTest extends TestCase
             'Acme',
             '123',
             [new Product(description: 'Widget', amount: 10.0, ncm: '12345678', cfop: '5102')],
-            new Address(state: 'SC', cityCode: '4205407'),
+            $this->validNfeAddress(),
         );
 
         $body = json_decode((string) $mock->getLastRequest()->getBody(), true);
         $this->assertSame('SC', $body['recipient_address']['state']);
-        $this->assertSame('4205407', $body['recipient_address']['city_code']);
+        $this->assertSame('4209102', $body['recipient_address']['city_code']);
+    }
+
+    public function testIssueRequiresRecipientAddressForNfe(): void
+    {
+        $invoice = new Invoice(apiKey: 'key');
+
+        $this->expectException(InvoiceError::class);
+        $this->expectExceptionMessage('recipientAddress is required for NFE');
+        $invoice->issue(
+            DocumentType::NFE,
+            'Acme',
+            '123',
+            [new Product(description: 'Widget', amount: 10.0, ncm: '12345678', cfop: '5102')],
+        );
+    }
+
+    public function testIssueRejectsPartialRecipientAddressForNfe(): void
+    {
+        $invoice = new Invoice(apiKey: 'key');
+
+        $this->expectException(InvoiceError::class);
+        $this->expectExceptionMessage('cityCode');
+        $invoice->issue(
+            DocumentType::NFE,
+            'Acme',
+            '123',
+            [new Product(description: 'Widget', amount: 10.0, ncm: '12345678', cfop: '5102')],
+            new Address(state: 'SC'),
+        );
+    }
+
+    public function testIssueAllowsNfseWithoutRecipientAddress(): void
+    {
+        $mock = new MockHandler([
+            new Response(200, ['Content-Type' => 'application/json'], (string) json_encode([
+                'result' => [],
+            ])),
+        ]);
+        $invoice = new Invoice(apiKey: 'key', baseUrl: 'https://example.com');
+        $this->injectMockHttpClient($invoice, $mock);
+
+        $invoice->issue(
+            DocumentType::NFSE,
+            'Acme',
+            '123',
+            [new Product(description: 'Servico', amount: 10.0)],
+        );
+
+        $this->assertSame('/api/v1/invoices', $mock->getLastRequest()->getUri()->getPath());
     }
 
     public function testIssueIncludesSeriesAndNumber(): void
