@@ -330,6 +330,26 @@ final class InvoiceTest extends TestCase
         $invoice->correct('abc123', DocumentType::NFE, str_repeat('a', 1001));
     }
 
+    public function testAnUnknownResponseFieldReachesTheCaller(): void
+    {
+        $mock = new MockHandler([
+            new Response(200, ['Content-Type' => 'application/json'], (string) json_encode([
+                'result' => [
+                    'access_key' => 'ABC',
+                    'status' => 'authorized',
+                    'field_invented_next_year' => ['nested' => [1, 2]],
+                ],
+            ])),
+        ]);
+        $invoice = new Invoice(apiKey: 'key', baseUrl: 'https://example.com');
+        $this->injectMockHttpClient($invoice, $mock);
+
+        $result = $invoice->consult('ABC', DocumentType::NFSE);
+
+        $this->assertSame('ABC', $result['access_key']);
+        $this->assertSame(['nested' => [1, 2]], $result['field_invented_next_year']);
+    }
+
     public function testReissueSendsPostToReissuePath(): void
     {
         $mock = new MockHandler([
