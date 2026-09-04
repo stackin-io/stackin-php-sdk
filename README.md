@@ -64,6 +64,44 @@ $result = $invoice->issue(
 
 The recipient `Address` passed to `issue()` is the buyer's address — **required for NFE** and ignored for NFSE. Every field is required, `cityCode` (the 7-digit IBGE municipality code) included: it becomes `enderDest` on the wire and the SEFAZ rejects a partial one. `state` is also what resolves `idDest` — a buyer in another state is emitted as an interstate operation automatically. A missing or incomplete address throws an `InvoiceError` locally, before the request goes out.
 
+## Retrying safely
+
+Issuing is the one call you must not repeat blindly. If the response is lost — a
+timeout, a dropped connection — the document may well have been authorized, and a
+second attempt issues a **second** fiscal document: another credit, another number
+burned, and undoing it means cancelling, which has a deadline.
+
+Pass an idempotency key to make the retry safe:
+
+```php
+$key = bin2hex(random_bytes(16));
+
+$result = $invoice->issue(
+    DocumentType::NFSE,
+    'Maria Silva',
+    '12345678909',
+    [new Product(description: 'Consultoria', amount: 1500.00)],
+    idempotencyKey: $key,
+);
+```
+
+Retry with the **same key and the same body** and you get the first response back,
+replayed — no second document, no credit consumed. Reissue takes the same argument.
+
+| Situation | What the API does |
+|---|---|
+| New key | issues normally, records the response |
+| Same key, same body | replays the recorded response |
+| Same key, different body | API error 422 |
+| Same key, first call still running | API error 409 |
+| Previous attempt failed | key is released — the retry issues |
+| Key older than 24 hours | treated as new |
+
+Generate the key yourself and keep it for as long as you might retry — one UUID per
+business event, not per HTTP call. The SDK never generates one, because a key minted
+per call would protect nothing, and because two genuinely separate invoices for the
+same customer and amount on the same day are a normal thing to issue.
+
 ## Errors
 
 - `Stackin\Errors\ApiError` — the API responded with a non-2xx status (`statusCode`/`detail` properties) — a 401 here means `api_key` is missing, wrong, or was rotated.
