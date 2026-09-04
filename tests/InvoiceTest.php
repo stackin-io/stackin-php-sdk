@@ -242,6 +242,48 @@ final class InvoiceTest extends TestCase
         $this->assertSame('idem-2', $request->getHeaderLine('Idempotency-Key'));
     }
 
+    public function testCorrectPostsToTheCorrectionPath(): void
+    {
+        $mock = new MockHandler([
+            new Response(200, ['Content-Type' => 'application/json'], (string) json_encode([
+                'result' => ['status' => 'authorized'],
+            ])),
+        ]);
+        $invoice = new Invoice(apiKey: 'key', baseUrl: 'https://example.com');
+        $this->injectMockHttpClient($invoice, $mock);
+
+        $result = $invoice->correct(
+            'abc123',
+            DocumentType::NFE,
+            'Transportadora corrigida para Rapido Ltda',
+        );
+
+        $request = $mock->getLastRequest();
+        $this->assertSame('POST', $request->getMethod());
+        $this->assertSame('/api/v1/invoices/abc123/correction', $request->getUri()->getPath());
+        $this->assertSame([
+            'document_type' => 'nfe',
+            'correction' => 'Transportadora corrigida para Rapido Ltda',
+        ], json_decode((string) $request->getBody(), true));
+        $this->assertSame('authorized', $result['status']);
+    }
+
+    public function testCorrectRejectsTextUnder15Characters(): void
+    {
+        $invoice = new Invoice(apiKey: 'key', baseUrl: 'https://example.com');
+
+        $this->expectException(InvoiceError::class);
+        $invoice->correct('abc123', DocumentType::NFE, 'curto demais');
+    }
+
+    public function testCorrectRejectsTextOver1000Characters(): void
+    {
+        $invoice = new Invoice(apiKey: 'key', baseUrl: 'https://example.com');
+
+        $this->expectException(InvoiceError::class);
+        $invoice->correct('abc123', DocumentType::NFE, str_repeat('a', 1001));
+    }
+
     public function testReissueSendsPostToReissuePath(): void
     {
         $mock = new MockHandler([
