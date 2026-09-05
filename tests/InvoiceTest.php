@@ -17,6 +17,7 @@ use Stackin\Errors\ApiError;
 use Stackin\Errors\ConnectionFailedError;
 use Stackin\Errors\InvoiceError;
 use Stackin\Invoice;
+use Stackin\Manifestation;
 
 final class InvoiceTest extends TestCase
 {
@@ -602,5 +603,52 @@ final class InvoiceTest extends TestCase
         } catch (ApiError $error) {
             $this->assertSame(501, $error->statusCode);
         }
+    }
+    /**
+     * Reads what the API already collected: the SEFAZ caps how many times a
+     * CNPJ may ask, so a listing must never reach the authorizer.
+     */
+    public function testReceivedListsWithoutPagination(): void
+    {
+        $mock = new MockHandler([
+            new Response(200, [], json_encode(['data' => [], 'total' => 0])),
+        ]);
+        $invoice = new Invoice(apiKey: 'secret');
+        $this->injectMockHttpClient($invoice, $mock);
+
+        $result = $invoice->received();
+
+        $this->assertSame(0, $result['total']);
+    }
+
+    public function testManifestSendsTheAnswer(): void
+    {
+        $mock = new MockHandler([
+            new Response(200, [], json_encode(['result' => ['status' => 'registered']])),
+        ]);
+        $invoice = new Invoice(apiKey: 'secret');
+        $this->injectMockHttpClient($invoice, $mock);
+
+        $result = $invoice->manifest('abc123', Manifestation::CIENCIA);
+
+        $this->assertSame('registered', $result['status']);
+    }
+
+    public function testManifestRequiresAReasonForOperacaoNaoRealizada(): void
+    {
+        $invoice = new Invoice(apiKey: 'secret');
+
+        $this->expectException(InvoiceError::class);
+
+        $invoice->manifest('abc123', Manifestation::OPERACAO_NAO_REALIZADA);
+    }
+
+    public function testManifestRefusesAReasonWhereNoneIsTaken(): void
+    {
+        $invoice = new Invoice(apiKey: 'secret');
+
+        $this->expectException(InvoiceError::class);
+
+        $invoice->manifest('abc123', Manifestation::CIENCIA, 'um motivo qualquer');
     }
 }
