@@ -18,7 +18,7 @@
 
 Official PHP SDK for fiscal document issuance — a handful of business fields, nothing about certificates, XML, XSD, signing or SOAP. The API resolves all of that from the issuer's own configuration, identified by `api_key`.
 
-**One class, `Invoice`** — `issue()`/`consult()`/`cancel()`/`reissue()`, nothing else to instantiate. Each line item is a `Br\Product` — `description`/`amount` apply to any document type; `ncm`/`cfop` (plus everything else on `Product`: `cest`, tax groups, presumed credits...) are Brazil-specific and required per item for NFE, ignored for NFSE.
+**One class, `Invoice`** — `issue()`/`consult()`/`cancel()`/`reissue()`/`correct()`/`invalidate()`/`pdf()`/`received()`/`manifest()`, nothing else to instantiate. Each line item is a `Br\Product` — `description`/`amount` apply to any document type; `ncm`/`cfop` (plus everything else on `Product`: `cest`, tax groups, presumed credits...) are Brazil-specific and required per item for NFE, ignored for NFSE.
 
 ## Install
 
@@ -59,6 +59,16 @@ $result = $invoice->issue(
         zipCode: '88010000',
         cityCode: '4205407',
     ),
+);
+
+$status = $invoice->consult('ACCESS_KEY...', DocumentType::NFSE);
+$invoice->cancel('ACCESS_KEY...', DocumentType::NFSE, 'Typo');
+
+// The authorizer's PDF, as raw bytes. NFS-e only; the XML stays the
+// legally valid document, and a 502 here means the authorizer is down.
+file_put_contents(
+    'nota.pdf',
+    $invoice->pdf('ACCESS_KEY...', DocumentType::NFSE),
 );
 ```
 
@@ -155,6 +165,39 @@ its own records first and answers `409` naming the offending numbers, without a
 round trip — and the authorizer checks again for what we can't see from here.
 
 **NF-e only**, and it takes no access key: there is no document to point at.
+
+## Documents issued against you
+
+Everything above serves the **issuer**. These two serve the **recipient**: what
+suppliers billed to this CNPJ, and the formal answer to it.
+
+Reading the list never calls the SEFAZ. The authorizer caps how many times a CNPJ
+may ask for its distribution per day, so collecting runs on a schedule on the API
+side and a page refresh cannot spend that allowance.
+
+```php
+use Stackin\\Manifestation;
+
+$page = $client->received(limit: 20);
+echo $page['total'];
+
+$client->manifest($accessKey, Manifestation::CIENCIA);
+$client->manifest(
+    $accessKey,
+    Manifestation::OPERACAO_NAO_REALIZADA,
+    'Mercadoria nunca chegou ao endereco',
+);
+```
+
+Before you answer a document the SEFAZ sends only a **summary** (`resNFe`): access
+key, issuer, amount, date. The **full document** (`nfeProc`) arrives after a
+manifestation, and the `schema` field on each row says which one you hold.
+
+The four answers are `210200` Confirmação da Operação, `210210` Ciência da
+Operação, `210220` Desconhecimento da Operação and `210240` Operação não
+Realizada. Only the last one takes a reason, and it requires one — both rules are
+checked locally, before the request goes out, because a round trip to be told a
+fixed rule is a round trip wasted.
 
 ## Errors
 
