@@ -238,6 +238,66 @@ final class Invoice
      * @return array<string, mixed>
      */
     /**
+     * Documents other companies issued against this one.
+     *
+     * Reads what the API already collected; it does not call the
+     * authorizer. Collecting runs on a schedule there, because the
+     * SEFAZ caps how many times a CNPJ may ask per day.
+     *
+     * @return array<string, mixed>
+     */
+    public function received(?int $limit = null, ?int $offset = null): array
+    {
+        $query = [];
+        if ($limit !== null) {
+            $query['limit'] = (string) $limit;
+        }
+        if ($offset !== null) {
+            $query['offset'] = (string) $offset;
+        }
+
+        return $this->request('GET', '/received-invoices', query: $query);
+    }
+
+    /**
+     * The recipient's formal answer to a received document.
+     *
+     * Only OPERACAO_NAO_REALIZADA takes a reason, and it requires one.
+     * Both are fixed rules, checked here rather than spending a round
+     * trip to be told.
+     *
+     * @return array<string, mixed>
+     */
+    public function manifest(
+        string $accessKey,
+        Manifestation $manifestation,
+        ?string $reason = null,
+    ): array {
+        $needsReason = $manifestation === Manifestation::OPERACAO_NAO_REALIZADA;
+        if ($needsReason && ($reason === null || $reason === '')) {
+            throw new InvoiceError(
+                'manifestation 210240 (operacao nao realizada) requires a reason'
+            );
+        }
+        if (!$needsReason && $reason !== null && $reason !== '') {
+            throw new InvoiceError(
+                "manifestation {$manifestation->value} does not take a reason"
+            );
+        }
+
+        $payload = ['manifestation' => $manifestation->value];
+        if ($reason !== null && $reason !== '') {
+            $payload['reason'] = $reason;
+        }
+
+        return $this->request(
+            'POST',
+            "/received-invoices/{$accessKey}/manifestation",
+            json: $payload,
+        );
+    }
+
+    /**
      * The authorizer's own rendering of an authorized document, as raw
      * bytes — the only method that does not return a parsed array.
      *
