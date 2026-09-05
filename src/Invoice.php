@@ -237,6 +237,30 @@ final class Invoice
      * @param array<string, mixed>|null $query
      * @return array<string, mixed>
      */
+    /**
+     * The authorizer's own rendering of an authorized document, as raw
+     * bytes — the only method that does not return a parsed array.
+     *
+     * The XML is the legally valid document; this is a convenience, and
+     * the authorizer's endpoint for it is unstable, so an ApiError with
+     * status 502 means the authorizer is unavailable, not that the
+     * invoice is wrong. NFS-e only.
+     */
+    public function pdf(string $accessKey, DocumentType $documentType): string
+    {
+        return $this->send(
+            'GET',
+            "/invoices/{$accessKey}/pdf",
+            query: ['document_type' => $documentType->value],
+        );
+    }
+
+    /**
+     * @param array<string, mixed>|null $json
+     * @param array<string, string>|null $query
+     *
+     * @return array<string, mixed>
+     */
     private function request(
         string $method,
         string $path,
@@ -244,6 +268,24 @@ final class Invoice
         ?array $query = null,
         ?string $idempotencyKey = null,
     ): array {
+        $body = $this->send($method, $path, $json, $query, $idempotencyKey);
+        $decoded = $body !== '' ? json_decode($body, true) : [];
+        $decoded = is_array($decoded) ? $decoded : [];
+
+        return $decoded['result'] ?? $decoded;
+    }
+
+    /**
+     * @param array<string, mixed>|null $json
+     * @param array<string, string>|null $query
+     */
+    private function send(
+        string $method,
+        string $path,
+        ?array $json = null,
+        ?array $query = null,
+        ?string $idempotencyKey = null,
+    ): string {
         $url = "{$this->baseUrl}/api/v1{$path}";
         $options = [];
         if ($json !== null) {
@@ -271,14 +313,14 @@ final class Invoice
 
         $status = $response->getStatusCode();
         $body = (string) $response->getBody();
-        $decoded = $body !== '' ? json_decode($body, true) : [];
-        $decoded = is_array($decoded) ? $decoded : [];
 
         if ($status < 200 || $status >= 300) {
+            $decoded = $body !== '' ? json_decode($body, true) : [];
+            $decoded = is_array($decoded) ? $decoded : [];
             $detail = $decoded['detail'] ?? $body;
             throw new ApiError($status, is_string($detail) ? $detail : json_encode($detail));
         }
 
-        return $decoded['result'] ?? $decoded;
+        return $body;
     }
 }
