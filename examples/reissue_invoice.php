@@ -8,15 +8,12 @@ use Stackin\Errors\ApiError;
 use Stackin\Errors\ConnectionFailedError;
 use Stackin\Invoice;
 
-if ($argc < 2) {
-    echo "Usage: php examples/reissue_invoice.php <invoice_id>\n";
-    exit;
-}
+const INVOICE_ID = '00000000-0000-0000-0000-000000000000';
 
-$invoice = new Invoice(apiKey: getenv('NFE_TEST_API_KEY') ?: null);
+$invoice = new Invoice(apiKey: getenv('STACKIN_API_KEY') ?: null);
 
 try {
-    $result = $invoice->reissue($argv[1]);
+    $result = $invoice->reissue(INVOICE_ID);
     echo "Reissued: {$result['access_key']} ({$result['status']})\n";
 } catch (ApiError $error) {
     echo "Request rejected ({$error->statusCode}): {$error->detail}\n";

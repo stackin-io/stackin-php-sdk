@@ -2,8 +2,24 @@
 
 declare(strict_types=1);
 
-require __DIR__ . '/_common.php';
+require __DIR__ . '/../../vendor/autoload.php';
 
 use Stackin\Br\Product;
+use Stackin\DocumentType;
+use Stackin\Invoice;
 
-issue(new Product(description: 'Software development', amount: 5000.00));
+$invoice = new Invoice(apiKey: getenv('STACKIN_API_KEY') ?: null);
+
+$product = new Product(
+    description: 'Software development',
+    amount: 5000.00,
+);
+
+$result = $invoice->issue(
+    DocumentType::NFSE,
+    'Comprador Teste Ltda',
+    '11222333000181',
+    [$product],
+);
+
+echo json_encode($result) . "\n";

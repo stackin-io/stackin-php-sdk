@@ -9,15 +9,13 @@ use Stackin\Errors\ApiError;
 use Stackin\Errors\ConnectionFailedError;
 use Stackin\Invoice;
 
-if ($argc < 4) {
-    echo "Usage: php examples/cancel_invoice.php <access_key> <nfe|nfse> <reason>\n";
-    exit;
-}
+const ACCESS_KEY = '42250611222333000181550010000000011000000017';
+const REASON = 'Emitida com dados incorretos do destinatario';
 
-$invoice = new Invoice(apiKey: getenv('NFE_TEST_API_KEY') ?: null);
+$invoice = new Invoice(apiKey: getenv('STACKIN_API_KEY') ?: null);
 
 try {
-    $result = $invoice->cancel($argv[1], DocumentType::from($argv[2]), $argv[3]);
+    $result = $invoice->cancel(ACCESS_KEY, DocumentType::NFE, REASON);
     echo 'Cancelled: ' . json_encode($result) . "\n";
 } catch (ApiError $error) {
     echo "Request rejected ({$error->statusCode}): {$error->detail}\n";
