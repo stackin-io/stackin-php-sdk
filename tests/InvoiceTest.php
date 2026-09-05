@@ -557,4 +557,50 @@ final class InvoiceTest extends TestCase
             $this->assertSame('["tax_id is invalid","cfop is invalid"]', $error->detail);
         }
     }
+    /**
+     * The only method returning bytes. A JSON round trip would corrupt the
+     * document, and the authorizer's endpoint for it is unstable by its own
+     * documentation, so a 502 must stay distinguishable from a bad note.
+     */
+    public function testPdfReturnsTheBytesUntouched(): void
+    {
+        $mock = new MockHandler([
+            new Response(200, ['Content-Type' => 'application/pdf'], '%PDF-1.4 fake'),
+        ]);
+        $invoice = new Invoice(apiKey: 'secret');
+        $this->injectMockHttpClient($invoice, $mock);
+
+        $bytes = $invoice->pdf('abc123', DocumentType::NFSE);
+
+        $this->assertSame('%PDF-1.4 fake', $bytes);
+    }
+
+    public function testPdfSurfacesAnUnavailableAuthorizer(): void
+    {
+        $mock = new MockHandler([
+            new Response(502, [], json_encode(['detail' => 'authorizer unavailable'])),
+        ]);
+        $invoice = new Invoice(apiKey: 'secret');
+        $this->injectMockHttpClient($invoice, $mock);
+
+        $this->expectException(ApiError::class);
+
+        $invoice->pdf('abc123', DocumentType::NFSE);
+    }
+
+    public function testPdfSurfacesNotImplementedForNfe(): void
+    {
+        $mock = new MockHandler([
+            new Response(501, [], json_encode(['detail' => "a PDF isn't available for nfe yet"])),
+        ]);
+        $invoice = new Invoice(apiKey: 'secret');
+        $this->injectMockHttpClient($invoice, $mock);
+
+        try {
+            $invoice->pdf('abc123', DocumentType::NFE);
+            $this->fail('expected an ApiError');
+        } catch (ApiError $error) {
+            $this->assertSame(501, $error->statusCode);
+        }
+    }
 }
