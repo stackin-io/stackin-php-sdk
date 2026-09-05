@@ -3,11 +3,44 @@ name: 📦 Package Packagist
 on:
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Tag to verify, e.g. v0.3.0
+        required: true
+        type: string
 
 permissions:
   contents: read
 
 jobs:
+  verify-version:
+    name: Verify the tag matches LAST_VERSION
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🔍 Compare tag against LAST_VERSION
+        run: |
+          TAG="${{ github.event.release.tag_name || inputs.tag }}"
+          VERSION="${TAG#v}"
+          DECLARED="$(tr -d '[:space:]' < LAST_VERSION)"
+
+          echo "tag:          $TAG"
+          echo "LAST_VERSION: $DECLARED"
+
+          if [ "$VERSION" != "$DECLARED" ]; then
+            echo "::error::Tag $TAG says $VERSION but LAST_VERSION says $DECLARED."
+            echo "::error::Update LAST_VERSION and re-tag — Packagist serves the tag forever."
+            exit 1
+          fi
+
+          if ! printf '%s' "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::Packagist needs a semver tag prefixed with v, got $TAG."
+            exit 1
+          fi
+
   test:
     name: Run Tests
     uses: ./.github/workflows/test.yml
@@ -18,9 +51,35 @@ jobs:
     uses: ./.github/workflows/code-quality.yml
     secrets: inherit
 
+  integration:
+    name: Issue a real document
+    needs: [verify-version, test, code-quality]
+    runs-on: ubuntu-latest
+    environment: workflow
+
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 📦 Setup PHP
+        uses: ./.github/actions/setup-php
+        with:
+          php-version: "8.3"
+
+      - name: 🧾 Issue an NFS-e through the published surface
+        env:
+          STACKIN_API_KEY: ${{ secrets.STACKIN_API_KEY }}
+        run: php examples/nfse/basic.php
+
+      - name: 📋 Summary
+        if: always()
+        run: |
+          echo "### Integration ${{ job.status }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "examples/nfse/basic.php against the live API" >> "$GITHUB_STEP_SUMMARY"
+
   notify-packagist:
     name: Notify Packagist
-    needs: [test, code-quality]
+    needs: [verify-version, test, code-quality, integration]
     runs-on: ubuntu-latest
     steps:
       - name: 📦 Trigger Packagist update
