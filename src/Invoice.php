@@ -260,6 +260,45 @@ final class Invoice
     }
 
     /**
+     * What this company issued, newest first.
+     *
+     * The counterpart of received(): that one lists what was issued
+     * against the company, this one what the company issued.
+     *
+     * @return array<string, mixed>
+     */
+    public function history(
+        ?DocumentType $documentType = null,
+        ?string $status = null,
+        ?int $limit = null,
+        ?int $offset = null,
+        ?string $sortBy = null,
+        ?string $orderBy = null,
+    ): array {
+        $query = [];
+        if ($documentType !== null) {
+            $query['document_type'] = $documentType->value;
+        }
+        if ($status !== null) {
+            $query['status'] = $status;
+        }
+        if ($limit !== null) {
+            $query['limit'] = (string) $limit;
+        }
+        if ($offset !== null) {
+            $query['offset'] = (string) $offset;
+        }
+        if ($sortBy !== null) {
+            $query['sort_by'] = $sortBy;
+        }
+        if ($orderBy !== null) {
+            $query['order_by'] = $orderBy;
+        }
+
+        return $this->request('GET', '/invoices', query: $query);
+    }
+
+    /**
      * The recipient's formal answer to a received document.
      *
      * Only OPERACAO_NAO_REALIZADA takes a reason, and it requires one.
