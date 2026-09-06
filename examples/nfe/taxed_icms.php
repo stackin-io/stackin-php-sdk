@@ -6,6 +6,7 @@ require __DIR__ . '/../../vendor/autoload.php';
 
 use Stackin\Address;
 use Stackin\Br\Product;
+use Stackin\Br\Tax;
 use Stackin\DocumentType;
 use Stackin\Invoice;
 
@@ -17,21 +18,16 @@ $product = new Product(
     freight: 0.03,
     ncm: '39202019',
     cfop: '6108',
-    tax: [
-        'icms' => ['ICMSSN102' => ['orig' => '0', 'CSOSN' => '102']],
-        'pis' => ['PISAliq' => [
-            'CST' => '01',
-            'vBC' => '0.30',
-            'pPIS' => '0.6500',
-            'vPIS' => '0.00',
-        ]],
-        'cofins' => ['COFINSAliq' => [
-            'CST' => '01',
-            'vBC' => '0.30',
-            'pCOFINS' => '3.0000',
-            'vCOFINS' => '0.01',
-        ]],
-    ],
+    tax: (new Tax(
+        icms: Tax::icmsSn102(CSOSN: '102', orig: '0'),
+        pis: Tax::pisAliq(CST: '01', vBC: '0.30', pPIS: '0.6500', vPIS: '0.00'),
+        cofins: Tax::cofinsAliq(
+            CST: '01',
+            vBC: '0.30',
+            pCOFINS: '3.0000',
+            vCOFINS: '0.01',
+        ),
+    ))->toArray(),
 );
 
 $result = $invoice->issue(

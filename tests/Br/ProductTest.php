@@ -87,11 +87,14 @@ final class ProductTest extends TestCase
             amount: 50.0,
             ncm: '84713012',
             cfop: '5102',
-            tax: ['ICMS' => ['ICMS00' => ['orig' => '0']]],
+            tax: ['icms' => ['orig' => '0', 'cst' => '00']],
         );
         $data = $product->toArray();
 
-        $this->assertSame(['ICMS' => ['ICMS00' => ['orig' => '0']]], $data['product']['br']['tax']);
+        $this->assertSame(
+            ['icms' => ['orig' => '0', 'cst' => '00']],
+            $data['product']['br']['tax'],
+        );
     }
 
     public function testNfseFields(): void
