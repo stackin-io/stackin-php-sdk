@@ -299,6 +299,25 @@ final class Invoice
     }
 
     /**
+     * Every attempt made for one invoice, with what the authorizer answered.
+     *
+     * consult() gives the status; this gives the reason. Takes the
+     * invoiceId, like reissue() and unlike everything else, because a
+     * rejected document has no access key to look it up by.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function submissions(string $invoiceId): array
+    {
+        $rows = $this->request('GET', "/invoices/{$invoiceId}/submissions");
+        if (!array_is_list($rows)) {
+            throw new InvoiceError('unexpected response shape: expected a list');
+        }
+
+        return $rows;
+    }
+
+    /**
      * The recipient's formal answer to a received document.
      *
      * Only OPERACAO_NAO_REALIZADA takes a reason, and it requires one.
