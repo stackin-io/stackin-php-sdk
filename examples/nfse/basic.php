@@ -11,7 +11,7 @@ use Stackin\Invoice;
 $invoice = new Invoice(apiKey: getenv('STACKIN_API_KEY') ?: null);
 
 $product = new Product(
-    description: 'Software development',
+    description: 'Software development SDK PHP',
     amount: 5000.00,
 );
 
