@@ -7,6 +7,7 @@ namespace Stackin\Tests;
 use GuzzleHttp\Client as HttpClient;
 use GuzzleHttp\Handler\MockHandler;
 use GuzzleHttp\HandlerStack;
+use GuzzleHttp\Middleware;
 use GuzzleHttp\Psr7\Response;
 use PHPUnit\Framework\TestCase;
 use ReflectionProperty;
@@ -619,6 +620,76 @@ final class InvoiceTest extends TestCase
         $result = $invoice->received();
 
         $this->assertSame(0, $result['total']);
+    }
+
+    /**
+     * The issuer's own side: what this company issued, not what it received.
+     */
+    public function testHistoryListsWithoutFilters(): void
+    {
+        $mock = new MockHandler([
+            new Response(200, [], json_encode(['data' => [], 'total' => 0])),
+        ]);
+        $invoice = new Invoice(apiKey: 'secret');
+        $this->injectMockHttpClient($invoice, $mock);
+
+        $result = $invoice->history();
+
+        $this->assertSame(0, $result['total']);
+    }
+
+    public function testHistoryPassesEveryFilterThrough(): void
+    {
+        $container = [];
+        $history = Middleware::history($container);
+        $mock = new MockHandler([
+            new Response(200, [], json_encode(['data' => []])),
+        ]);
+        $handlerStack = HandlerStack::create($mock);
+        $handlerStack->push($history);
+        $httpClient = new HttpClient([
+            'handler' => $handlerStack,
+            'http_errors' => false,
+        ]);
+        $invoice = new Invoice(apiKey: 'secret');
+        $property = new ReflectionProperty(Invoice::class, 'http');
+        $property->setAccessible(true);
+        $property->setValue($invoice, $httpClient);
+
+        $invoice->history(
+            documentType: DocumentType::NFE,
+            status: 'rejected',
+            limit: 10,
+            offset: 20,
+            sortBy: 'created_at',
+            orderBy: 'asc',
+        );
+
+        $query = $container[0]['request']->getUri()->getQuery();
+        parse_str($query, $sent);
+        $this->assertSame('nfe', $sent['document_type']);
+        $this->assertSame('rejected', $sent['status']);
+        $this->assertSame('10', $sent['limit']);
+        $this->assertSame('20', $sent['offset']);
+        $this->assertSame('created_at', $sent['sort_by']);
+        $this->assertSame('asc', $sent['order_by']);
+    }
+
+    public function testHistoryReturnsThePaginatedEnvelope(): void
+    {
+        $mock = new MockHandler([
+            new Response(200, [], json_encode([
+                'data' => [['id' => 'abc']],
+                'total' => 1,
+                'page' => 1,
+            ])),
+        ]);
+        $invoice = new Invoice(apiKey: 'secret');
+        $this->injectMockHttpClient($invoice, $mock);
+
+        $result = $invoice->history(limit: 1);
+
+        $this->assertSame(1, $result['total']);
     }
 
     public function testManifestSendsTheAnswer(): void
