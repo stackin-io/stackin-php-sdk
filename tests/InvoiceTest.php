@@ -692,6 +692,50 @@ final class InvoiceTest extends TestCase
         $this->assertSame(1, $result['total']);
     }
 
+    /**
+     * consult() says a document was rejected; this says why.
+     */
+    public function testSubmissionsReadsTheAttemptsByInvoiceId(): void
+    {
+        $container = [];
+        $history = Middleware::history($container);
+        $mock = new MockHandler([
+            new Response(200, [], json_encode([
+                ['status' => 'rejected', 'status_code' => '209'],
+            ])),
+        ]);
+        $handlerStack = HandlerStack::create($mock);
+        $handlerStack->push($history);
+        $httpClient = new HttpClient([
+            'handler' => $handlerStack,
+            'http_errors' => false,
+        ]);
+        $invoice = new Invoice(apiKey: 'secret');
+        $property = new ReflectionProperty(Invoice::class, 'http');
+        $property->setAccessible(true);
+        $property->setValue($invoice, $httpClient);
+
+        $rows = $invoice->submissions('abc-123');
+
+        $path = $container[0]['request']->getUri()->getPath();
+        $this->assertSame('/api/v1/invoices/abc-123/submissions', $path);
+        $this->assertCount(1, $rows);
+        $this->assertSame('209', $rows[0]['status_code']);
+    }
+
+    public function testSubmissionsRefusesAResponseThatIsNotAList(): void
+    {
+        $mock = new MockHandler([
+            new Response(200, [], json_encode(['result' => ['a' => 1]])),
+        ]);
+        $invoice = new Invoice(apiKey: 'secret');
+        $this->injectMockHttpClient($invoice, $mock);
+
+        $this->expectException(InvoiceError::class);
+
+        $invoice->submissions('abc-123');
+    }
+
     public function testManifestSendsTheAnswer(): void
     {
         $mock = new MockHandler([
