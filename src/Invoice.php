@@ -374,10 +374,12 @@ final class Invoice
     }
 
     /**
+     * Most routes answer with an object; submissions answers with a list.
+     *
      * @param array<string, mixed>|null $json
      * @param array<string, string>|null $query
      *
-     * @return array<string, mixed>
+     * @return array<mixed>
      */
     private function request(
         string $method,
