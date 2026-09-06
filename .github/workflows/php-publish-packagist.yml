@@ -56,7 +56,6 @@ jobs:
     needs: [verify-version, test, code-quality]
     uses: ./.github/workflows/integration.yml
     secrets: inherit
-          echo "examples/nfse/basic.php against the live API" >> "$GITHUB_STEP_SUMMARY"
 
   notify-packagist:
     name: Notify Packagist
