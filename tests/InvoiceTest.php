@@ -244,6 +244,40 @@ final class InvoiceTest extends TestCase
         $this->assertSame('idem-2', $request->getHeaderLine('Idempotency-Key'));
     }
 
+    public function testCancelSendsIdempotencyKeyHeaderWhenGiven(): void
+    {
+        $mock = new MockHandler([
+            new Response(200, ['Content-Type' => 'application/json'], (string) json_encode([
+                'result' => ['status' => 'cancelled'],
+            ])),
+        ]);
+        $invoice = new Invoice(apiKey: 'key', baseUrl: 'https://example.com');
+        $this->injectMockHttpClient($invoice, $mock);
+
+        $invoice->cancel('abc123', DocumentType::NFSE, 'duplicate', 'idem-3');
+
+        $request = $mock->getLastRequest();
+        $this->assertSame('idem-3', $request->getHeaderLine('Idempotency-Key'));
+        $body = json_decode((string) $request->getBody(), true);
+        $this->assertArrayNotHasKey('idempotency_key', $body);
+    }
+
+    public function testCancelOmitsIdempotencyKeyHeaderByDefault(): void
+    {
+        $mock = new MockHandler([
+            new Response(200, ['Content-Type' => 'application/json'], (string) json_encode([
+                'result' => ['status' => 'cancelled'],
+            ])),
+        ]);
+        $invoice = new Invoice(apiKey: 'key', baseUrl: 'https://example.com');
+        $this->injectMockHttpClient($invoice, $mock);
+
+        $invoice->cancel('abc123', DocumentType::NFSE, 'duplicate');
+
+        $request = $mock->getLastRequest();
+        $this->assertFalse($request->hasHeader('Idempotency-Key'));
+    }
+
     public function testInvalidatePostsToTheInvalidationsPath(): void
     {
         $mock = new MockHandler([

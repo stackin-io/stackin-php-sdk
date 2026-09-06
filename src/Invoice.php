@@ -154,16 +154,28 @@ final class Invoice
     /**
      * Cancels a fiscal document by its access key.
      *
+     * Pass $idempotencyKey to make a retry safe: the same key with the same
+     * payload replays the first answer instead of cancelling twice.
+     *
      * @return array<string, mixed>
      */
-    public function cancel(string $accessKey, DocumentType $documentType, string $reason): array
-    {
+    public function cancel(
+        string $accessKey,
+        DocumentType $documentType,
+        string $reason,
+        ?string $idempotencyKey = null,
+    ): array {
         $payload = [
             'document_type' => $documentType->value,
             'reason' => $reason,
         ];
 
-        return $this->request('POST', "/invoices/{$accessKey}/cancel", json: $payload);
+        return $this->request(
+            'POST',
+            "/invoices/{$accessKey}/cancel",
+            json: $payload,
+            idempotencyKey: $idempotencyKey,
+        );
     }
 
     /**
