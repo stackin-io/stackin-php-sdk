@@ -7,7 +7,8 @@ namespace Stackin\Br;
 /**
  * One product or service line item on an invoice.
  *
- * `description`/`amount` apply to any document type. The rest are
+ * `description` plus either `unitPrice` or `amount` apply to any
+ * document type. The rest are
  * Brazil-specific and required per item only when document_type is
  * NFE — ignored for NFSE.
  */
@@ -15,7 +16,7 @@ final class Product
 {
     public function __construct(
         public readonly string $description,
-        public readonly float $amount,
+        public readonly ?float $amount = null,
         public readonly string $unit = 'UN',
         public readonly float $quantity = 1.0,
         public readonly ?string $barcode = null,
@@ -47,7 +48,13 @@ final class Product
         public readonly ?float $serviceDiscount = null,
         public readonly bool $taxRetained = false,
         public readonly ?string $observations = null,
+        public readonly ?float $unitPrice = null,
     ) {
+    }
+
+    private static function decimalString(?float $value): ?string
+    {
+        return $value === null ? null : rtrim(rtrim(number_format($value, 10, '.', ''), '0'), '.');
     }
 
     /**
@@ -102,7 +109,8 @@ final class Product
         $result = array_filter(
             [
                 'description' => $this->description,
-                'amount' => $this->amount,
+                'amount' => self::decimalString($this->amount),
+                'unit_price' => self::decimalString($this->unitPrice),
                 'product' => $data,
                 'service_code' => $this->serviceCode,
                 'discount' => $this->serviceDiscount,
