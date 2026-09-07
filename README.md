@@ -20,6 +20,33 @@ Official PHP SDK for fiscal document issuance — a handful of business fields, 
 
 **One class, `Invoice`** — `issue()`/`consult()`/`cancel()`/`reissue()`/`correct()`/`invalidate()`/`pdf()`/`received()`/`manifest()`, nothing else to instantiate. Each line item is a `Br\Product` — `description`/`amount` apply to any document type; `ncm`/`cfop` (plus everything else on `Product`: `cest`, tax groups, presumed credits...) are Brazil-specific and required per item for NFE, ignored for NFSE.
 
+## What a line item is worth
+
+`unitPrice` is the price of **one unit**. `amount` is the **gross total of
+the line's products**, before discount, freight, insurance and other
+expenses. Send either; sending both asserts that they agree.
+
+```php
+// More than one unit — the note's line is 2 x 120.00 = 240.00
+new Product(description: 'Teclado', quantity: 2.0, unitPrice: 120.00, unit: 'UN');
+
+// Legacy: amount alone still means the line's gross total
+new Product(description: 'Servico', amount: 150.00, quantity: 3.0);
+```
+
+Amounts that do not add up are refused before the authorizer sees them,
+with a `422` naming the line and both numbers (`ITEM_TOTAL_MISMATCH`).
+
+### Migrating
+
+```text
+Before:  quantity: 3.0, amount: 150.00
+After:   quantity: 3.0, unitPrice: 50.00
+```
+
+Nothing has to migrate. `amount` keeps the meaning it always had and is
+not deprecated in this release.
+
 ## Install
 
 ```shell
