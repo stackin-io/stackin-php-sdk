@@ -15,7 +15,7 @@ final class ProductTest extends TestCase
         $data = $product->toArray();
 
         $this->assertSame('Servico basico', $data['description']);
-        $this->assertSame(100.0, $data['amount']);
+        $this->assertSame('100', $data['amount']);
         $this->assertSame(
             ['unit' => 'UN', 'quantity' => 1.0, 'used_movable_asset' => false],
             $data['product'],
@@ -173,5 +173,64 @@ final class ProductTest extends TestCase
             $data['import_content_control_number'],
         );
         $this->assertSame('00000000000012345678', $data['recopi_number']);
+    }
+
+    public function testUnitPriceIsSentWhenGiven(): void
+    {
+        $product = new Product(
+            description: 'Teclado',
+            quantity: 2.0,
+            unitPrice: 120.00,
+            unit: 'UN',
+        );
+
+        $data = $product->toArray();
+
+        $this->assertSame('120', $data['unit_price']);
+        $this->assertArrayNotHasKey('amount', $data);
+    }
+
+    public function testTheLegacyLineStillSendsATotal(): void
+    {
+        $product = new Product(description: 'Servico', amount: 100.00, quantity: 3.0);
+
+        $data = $product->toArray();
+
+        $this->assertSame('100', $data['amount']);
+        $this->assertArrayNotHasKey('unit_price', $data);
+    }
+
+    public function testBothMayBeSentWhenTheyAgree(): void
+    {
+        $product = new Product(
+            description: 'Teclado',
+            amount: 240.00,
+            quantity: 2.0,
+            unitPrice: 120.00,
+        );
+
+        $data = $product->toArray();
+
+        $this->assertSame('120', $data['unit_price']);
+        $this->assertSame('240', $data['amount']);
+    }
+
+    public function testTheTenthPlaceSurvivesTheWire(): void
+    {
+        $product = new Product(
+            description: 'Granel',
+            quantity: 1.0,
+            unitPrice: 0.0000000001,
+        );
+
+        $this->assertSame('0.0000000001', $product->toArray()['unit_price']);
+    }
+
+    public function testALineMayCarryNeither(): void
+    {
+        $data = (new Product(description: 'Servico'))->toArray();
+
+        $this->assertArrayNotHasKey('amount', $data);
+        $this->assertArrayNotHasKey('unit_price', $data);
     }
 }
