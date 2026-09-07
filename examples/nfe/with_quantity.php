@@ -13,7 +13,7 @@ $invoice = new Invoice(apiKey: getenv('STACKIN_API_KEY') ?: null);
 
 $product = new Product(
     description: 'Caixa de parafusos',
-    amount: 12.50,
+    unitPrice: 12.50,
     unit: 'CX',
     quantity: 20,
     ncm: '73181500',
