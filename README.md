@@ -72,7 +72,7 @@ $result = $invoice->issue(
     [
         new Product(
             description: 'Rosa Holambra Vermelha',
-            amount: 112.44,
+            unitPrice: 112.44,
             ncm: '06031100',
             cfop: '5102',
         ),
@@ -117,7 +117,7 @@ $result = $invoice->issue(
     DocumentType::NFSE,
     'Maria Silva',
     '12345678909',
-    [new Product(description: 'Consultoria', amount: 1500.00)],
+    [new Product(description: 'Consultoria', unitPrice: 1500.00)],
     idempotencyKey: $key,
 );
 ```

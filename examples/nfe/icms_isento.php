@@ -14,7 +14,7 @@ $invoice = new Invoice(apiKey: getenv('STACKIN_API_KEY') ?: null);
 
 $product = new Product(
     description: 'Rosa Holambra Vermelha',
-    amount: 112.44,
+    unitPrice: 112.44,
     quantity: 6,
     freight: 11.05,
     ncm: '06031100',

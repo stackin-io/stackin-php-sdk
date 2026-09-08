@@ -13,7 +13,7 @@ $invoice = new Invoice(apiKey: getenv('STACKIN_API_KEY') ?: null);
 
 $product = new Product(
     description: 'Produto com encargos adicionais',
-    amount: 200.00,
+    unitPrice: 200.00,
     freight: 15.00,
     insurance: 5.00,
     discount: 10.00,

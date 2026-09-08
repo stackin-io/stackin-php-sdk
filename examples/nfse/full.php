@@ -13,7 +13,7 @@ $invoice = new Invoice(apiKey: getenv('STACKIN_API_KEY') ?: null);
 
 $product = new Product(
     description: 'Software licensing',
-    amount: 1200.00,
+    unitPrice: 1200.00,
     serviceCode: '1.05',
     serviceDiscount: 100.00,
     taxRetained: true,

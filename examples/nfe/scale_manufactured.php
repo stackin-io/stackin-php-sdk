@@ -13,7 +13,7 @@ $invoice = new Invoice(apiKey: getenv('STACKIN_API_KEY') ?: null);
 
 $product = new Product(
     description: 'Produto de fabricacao em escala',
-    amount: 150.00,
+    unitPrice: 150.00,
     ncm: '87141000',
     cfop: '5102',
     cest: '0100100',

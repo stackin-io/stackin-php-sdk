@@ -12,7 +12,7 @@ $invoice = new Invoice(apiKey: getenv('STACKIN_API_KEY') ?: null);
 
 $product = new Product(
     description: 'Software development SDK PHP',
-    amount: 5000.00,
+    unitPrice: 5000.00,
 );
 
 $result = $invoice->issue(

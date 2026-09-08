@@ -13,7 +13,7 @@ $invoice = new Invoice(apiKey: getenv('STACKIN_API_KEY') ?: null);
 
 $product = new Product(
     description: 'Produto completo - todos os campos',
-    amount: 999.99,
+    unitPrice: 999.99,
     unit: 'UN',
     quantity: 2,
     barcode: '7891000100103',

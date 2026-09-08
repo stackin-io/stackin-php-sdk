@@ -14,7 +14,7 @@ $invoice = new Invoice(apiKey: getenv('STACKIN_API_KEY') ?: null);
 
 $product = new Product(
     description: 'Urso de Pelucia Dudu',
-    amount: 92.72,
+    unitPrice: 92.72,
     freight: 9.12,
     ncm: '95030031',
     cfop: '6108',

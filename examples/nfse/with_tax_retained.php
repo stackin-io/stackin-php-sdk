@@ -13,7 +13,7 @@ $invoice = new Invoice(apiKey: getenv('STACKIN_API_KEY') ?: null);
 
 $product = new Product(
     description: 'UI/UX design',
-    amount: 3200.00,
+    unitPrice: 3200.00,
     serviceCode: '1.03',
     taxRetained: true,
 );

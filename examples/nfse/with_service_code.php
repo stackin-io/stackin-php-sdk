@@ -12,7 +12,7 @@ $invoice = new Invoice(apiKey: getenv('STACKIN_API_KEY') ?: null);
 
 $product = new Product(
     description: 'Technical consulting - 10 hours',
-    amount: 1500.00,
+    unitPrice: 1500.00,
     serviceCode: '1.06',
 );
 

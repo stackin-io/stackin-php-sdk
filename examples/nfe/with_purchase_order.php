@@ -13,7 +13,7 @@ $invoice = new Invoice(apiKey: getenv('STACKIN_API_KEY') ?: null);
 
 $product = new Product(
     description: 'Produto vinculado a pedido de compra',
-    amount: 75.00,
+    unitPrice: 75.00,
     purchaseOrder: 'PC-2026-00042',
     purchaseOrderItem: '1',
     ncm: '84433210',

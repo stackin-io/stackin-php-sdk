@@ -13,7 +13,7 @@ $invoice = new Invoice(apiKey: getenv('STACKIN_API_KEY') ?: null);
 
 $product = new Product(
     description: 'Bem movel usado',
-    amount: 500.00,
+    unitPrice: 500.00,
     usedMovableAsset: true,
     ncm: '87032310',
     cfop: '5102',

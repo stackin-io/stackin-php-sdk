@@ -12,7 +12,7 @@ $invoice = new Invoice(apiKey: getenv('STACKIN_API_KEY') ?: null);
 
 $product = new Product(
     description: 'Monthly support and maintenance',
-    amount: 800.00,
+    unitPrice: 800.00,
     serviceCode: '1.07',
     serviceDiscount: 50.00,
 );
