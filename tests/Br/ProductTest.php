@@ -233,4 +233,34 @@ final class ProductTest extends TestCase
         $this->assertArrayNotHasKey('amount', $data);
         $this->assertArrayNotHasKey('unit_price', $data);
     }
+
+    public function testIbsCbsNestsUnderBr(): void
+    {
+        $product = new Product(
+            description: 'Teclado',
+            quantity: 2.0,
+            unitPrice: 120.00,
+            ncm: '84716052',
+            cfop: '5102',
+            ibsCbs: [
+                'cst' => '000',
+                'classification' => '000001',
+                'rate_state' => 0.1,
+                'rate_city' => 0.0,
+                'rate_federal' => 0.9,
+            ],
+        );
+
+        $br = $product->toArray()['product']['br'];
+
+        $this->assertSame('000', $br['ibs_cbs']['cst']);
+        $this->assertSame('000001', $br['ibs_cbs']['classification']);
+    }
+
+    public function testAnItemWithoutIbsCbsSendsNothing(): void
+    {
+        $product = new Product(description: 'Teclado', unitPrice: 10.00);
+
+        $this->assertArrayNotHasKey('br', $product->toArray()['product']);
+    }
 }
