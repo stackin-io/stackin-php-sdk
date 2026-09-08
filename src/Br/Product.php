@@ -49,6 +49,8 @@ final class Product
         public readonly bool $taxRetained = false,
         public readonly ?string $observations = null,
         public readonly ?float $unitPrice = null,
+        /** @var array<string, mixed>|null */
+        public readonly ?array $ibsCbs = null,
     ) {
     }
 
@@ -94,6 +96,7 @@ final class Product
                 'import_content_control_number' => $this->importContentControlNumber,
                 'recopi_number' => $this->recopiNumber,
                 'tax' => $this->tax,
+                'ibs_cbs' => $this->ibsCbs,
             ],
             static fn (mixed $value): bool => $value !== null,
         );
