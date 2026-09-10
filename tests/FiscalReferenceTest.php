@@ -14,6 +14,7 @@ use PHPUnit\Framework\TestCase;
 use ReflectionProperty;
 use Stackin\Client;
 use Stackin\Errors\ApiError;
+use Stackin\Errors\InvoiceError;
 use Stackin\FiscalReference;
 use Stackin\Kind;
 
@@ -180,5 +181,36 @@ final class FiscalReferenceTest extends TestCase
             $this->sent[0]['request']->getUri()->getPath(),
         );
         self::assertContains('brand_new', $kinds);
+    }
+
+    /**
+     * A code the caller types by hand must not rewrite the path.
+     */
+    public function testASlashInACodeStaysInsideItsSegment(): void
+    {
+        $client = $this->client();
+
+        $client->ncm->get('8471/60/52');
+
+        self::assertSame(
+            '/api/v1/fiscal-references/ncm/8471%2F60%2F52',
+            $this->sent[0]['request']->getUri()->getPath(),
+        );
+    }
+
+    public function testAKindCannotClimbOutOfItsEndpoint(): void
+    {
+        $client = new FiscalReference(apiKey: 'k');
+
+        $this->expectException(InvoiceError::class);
+        $client->kind('..')->get('kinds');
+    }
+
+    public function testAnEmptyCodeIsRefusedRatherThanDropped(): void
+    {
+        $client = new FiscalReference(apiKey: 'k');
+
+        $this->expectException(InvoiceError::class);
+        $client->ncm->get('');
     }
 }

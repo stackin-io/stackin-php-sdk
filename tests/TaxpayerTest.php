@@ -16,6 +16,7 @@ use ReflectionMethod;
 use ReflectionProperty;
 use Stackin\Client;
 use Stackin\Errors\ApiError;
+use Stackin\Errors\InvoiceError;
 use Stackin\Taxpayer;
 
 final class TaxpayerTest extends TestCase
@@ -101,5 +102,28 @@ final class TaxpayerTest extends TestCase
         }
 
         self::assertSame(['get'], $own);
+    }
+
+    /**
+     * A CNPJ is displayed with a slash; it must not rewrite the path.
+     */
+    public function testAFormattedCnpjStaysInsideItsSegment(): void
+    {
+        $client = $this->client();
+
+        $client->get('00.000.000/0001-91');
+
+        self::assertSame(
+            '/api/v1/taxpayers/00.000.000%2F0001-91',
+            $this->sent[0]['request']->getUri()->getPath(),
+        );
+    }
+
+    public function testAnEmptyTaxIdIsRefusedRatherThanDropped(): void
+    {
+        $client = new Taxpayer(apiKey: 'k');
+
+        $this->expectException(InvoiceError::class);
+        $client->get('');
     }
 }
