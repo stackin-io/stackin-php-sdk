@@ -358,5 +358,4 @@ final class Invoice extends Client
             query: ['document_type' => $documentType->value],
         );
     }
-
 }

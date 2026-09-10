@@ -95,7 +95,10 @@ final class TaxpayerTest extends TestCase
     public function testItDeclaresExactlyOneMethodOfItsOwn(): void
     {
         $own = [];
-        foreach ((new ReflectionClass(Taxpayer::class))->getMethods(ReflectionMethod::IS_PUBLIC) as $method) {
+        $public = (new ReflectionClass(Taxpayer::class))
+            ->getMethods(ReflectionMethod::IS_PUBLIC);
+
+        foreach ($public as $method) {
             if ($method->getDeclaringClass()->getName() === Taxpayer::class) {
                 $own[] = $method->getName();
             }
