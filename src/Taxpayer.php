@@ -29,9 +29,11 @@ final class Taxpayer extends Client
      */
     public function get(string $taxId, ?string $country = null): array
     {
+        $escaped = FiscalReference::segment($taxId);
+
         return $this->request(
             'GET',
-            "/taxpayers/{$taxId}",
+            "/taxpayers/{$escaped}",
             null,
             ['country' => $country ?? $this->country],
         );

@@ -122,6 +122,24 @@ final class FiscalReference extends Client
     }
 
     /**
+     * One path segment, escaped, refusing the ones that would leave it.
+     *
+     * rawurlencode leaves '.' alone — RFC 3986 calls it unreserved — so
+     * the dot segments have to be refused rather than escaped, or the
+     * HTTP client collapses '..' into a different endpoint.
+     *
+     * @internal Shared with Kind.
+     */
+    public static function segment(string $value): string
+    {
+        if ($value === '' || $value === '.' || $value === '..') {
+            throw new InvoiceError("'{$value}' is not a usable path segment");
+        }
+
+        return rawurlencode($value);
+    }
+
+    /**
      * @internal Shared with Kind::search().
      * @return array<string, string>
      */

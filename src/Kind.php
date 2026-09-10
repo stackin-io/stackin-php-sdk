@@ -27,8 +27,11 @@ final class Kind
      */
     public function get(string $code, ?string $country = null): array
     {
+        $name = FiscalReference::segment($this->name);
+        $escaped = FiscalReference::segment($code);
+
         return ($this->call)(
-            "/fiscal-references/{$this->name}/{$code}",
+            "/fiscal-references/{$name}/{$escaped}",
             ['country' => $country ?? $this->country],
         );
     }
