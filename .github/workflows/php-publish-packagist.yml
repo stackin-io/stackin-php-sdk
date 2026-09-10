@@ -1,5 +1,19 @@
 name: 📦 Package Packagist
 
+# Packagist resolves straight from the tag, so this does not upload a
+# build — it writes LAST_VERSION from the tag, runs the same tests and
+# lint the branch runs, and then tells Packagist to look.
+#
+# It used to *verify* LAST_VERSION instead, which made every release a
+# two-step ritual — bump, push, then tag — and three releases in a row
+# failed because the tag came first. Deriving it from the tag is what
+# the Python SDK does, and there is one source of truth either way.
+#
+# The commit lands after the tag, so the tag itself still carries the
+# previous LAST_VERSION. Composer reads the version from the tag, never
+# from that file, so the file is a record of the last release rather
+# than of the tagged tree.
+
 on:
   release:
     types: [published]
@@ -11,35 +25,48 @@ on:
         type: string
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  verify-version:
-    name: Verify the tag matches LAST_VERSION
+  update-version:
+    name: Write LAST_VERSION from the tag
     runs-on: ubuntu-latest
     steps:
-      - name: 📥 Checkout code
+      - name: 📥 Checkout the default branch
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 0
 
-      - name: 🔍 Compare tag against LAST_VERSION
+      - name: 🔍 Extract version from tag
+        id: version
         run: |
           TAG="${{ github.event.release.tag_name || inputs.tag }}"
-          VERSION="${TAG#v}"
-          DECLARED="$(tr -d '[:space:]' < LAST_VERSION)"
-
-          echo "tag:          $TAG"
-          echo "LAST_VERSION: $DECLARED"
-
-          if [ "$VERSION" != "$DECLARED" ]; then
-            echo "::error::Tag $TAG says $VERSION but LAST_VERSION says $DECLARED."
-            echo "::error::Update LAST_VERSION and re-tag — Packagist serves the tag forever."
-            exit 1
-          fi
 
           if ! printf '%s' "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
             echo "::error::Packagist needs a semver tag prefixed with v, got $TAG."
             exit 1
           fi
+
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+          echo "tag $TAG -> ${TAG#v}"
+
+      - name: 📝 Write LAST_VERSION
+        run: echo "${{ steps.version.outputs.version }}" > LAST_VERSION
+
+      - name: 💾 Commit and push
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add LAST_VERSION
+
+          if git diff --staged --quiet; then
+            echo "LAST_VERSION already says this version"
+            exit 0
+          fi
+
+          git commit -m "📦 PKG: Update version to ${{ steps.version.outputs.version }}"
+          git push origin HEAD:${{ github.event.repository.default_branch }}
 
   test:
     name: Run Tests
@@ -53,13 +80,13 @@ jobs:
 
   integration:
     name: Issue a real document
-    needs: [verify-version, test, code-quality]
+    needs: [update-version, test, code-quality]
     uses: ./.github/workflows/integration.yml
     secrets: inherit
 
   notify-packagist:
     name: Notify Packagist
-    needs: [verify-version, test, code-quality, integration]
+    needs: [update-version, test, code-quality, integration]
     runs-on: ubuntu-latest
     steps:
       - name: 📦 Trigger Packagist update
