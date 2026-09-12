@@ -1,4 +1,4 @@
-name: 🔍 Code Quality
+name: Code Quality
 
 on:
   pull_request:
@@ -8,31 +8,8 @@ on:
 
 jobs:
   code-quality:
-    name: Code Quality Checks
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        php-version: ["8.1", "8.2", "8.3"]
-
     steps:
-      - name: 📥 Checkout code
-        uses: actions/checkout@v4
-
-      - name: 📦 Setup PHP
-        uses: ./.github/actions/setup-php
-        with:
-          php-version: ${{ matrix.php-version }}
-
-      - name: 🔍 phpcs (Linting)
-        run: vendor/bin/phpcs --standard=.code_quality/phpcs.xml src tests
-
-      - name: 🎨 PHPStan (Static Analysis)
-        run: vendor/bin/phpstan analyse -c .code_quality/phpstan.neon
-
-      - name: ✅ Code Quality Summary
-        if: always()
-        run: |
-          echo "### Code Quality Checks Completed ✅" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "PHP Version: ${{ matrix.php-version }}" >> $GITHUB_STEP_SUMMARY
-          echo "All code quality tools have been executed." >> $GITHUB_STEP_SUMMARY
+      - uses: actions/checkout@v5
+      - uses: actionplatform/ci-github/setup@v1
+      - uses: actionplatform/ci-github/check@v1
