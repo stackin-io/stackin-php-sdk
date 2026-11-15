@@ -460,6 +460,7 @@ final class ProductTest extends TestCase
             '19 digits' => ['2013110611460973439'],
             '21 digits' => ['201311061146097343930'],
             'letters' => ['2013110611460973439A'],
+            'trailing newline' => ["20131106114609734393\n"],
         ];
     }
 

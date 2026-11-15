@@ -75,7 +75,7 @@ final class Product
         if ($barcode !== null && $barcode !== 'SEM GTIN' && !self::validGtinCheckDigit($barcode)) {
             throw new InvoiceError('barcode has an invalid GTIN check digit');
         }
-        if ($recopiNumber !== null && preg_match('/^\d{20}$/', $recopiNumber) !== 1) {
+        if ($recopiNumber !== null && preg_match('/^\d{20}\z/', $recopiNumber) !== 1) {
             throw new InvoiceError('recopiNumber must have exactly 20 digits');
         }
         if ($recopiNumber !== null && !self::validRecopiCheckDigits($recopiNumber)) {
