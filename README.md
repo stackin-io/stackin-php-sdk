@@ -166,10 +166,13 @@ the authorized XML stays as it was. A document accepts at most 20 of them, and
 they are numbered for you.
 
 **NF-e only.** NFS-e has no correction letter. The access key already says
-which one it is — an NF-e key is 44 digits, an NFS-e key 50 — so a key that is
-not 44 digits is refused locally, before the call, with an `InvoiceError`:
+which one it is — an NF-e access key is 44 characters, an NFS-e key 50 digits —
+so a key that is not an NF-e access key is refused locally, before the call,
+with an `InvoiceError`:
 `correct is NFe only. NFSe has no correction letter — cancel and reissue instead.`
-What only the API can know is still an `ApiError` with status `409`: a 44-digit
+From July 2026 the issuer CNPJ inside the key may be alphanumeric, so its first
+12 characters accept `0-9` and `A-Z` (uppercase); the rest of the key is digits.
+What only the API can know is still an `ApiError` with status `409`: an NF-e
 key sent with `DocumentType::NFSE`, or a key for a document the API does not hold.
 
 ## Invalidating unused numbers
@@ -268,7 +271,7 @@ Three things worth knowing before you loop:
 - `Stackin\Errors\ConnectionFailedError` — the API didn't respond (network/DNS/timeout).
 - `Stackin\Errors\InvoiceError` — a request that would obviously fail server-side, caught before the network call:
   - `issue()`'s items is empty, missing `ncm`/`cfop` on an item for NFE, or a missing/incomplete recipient `Address` on NFE.
-  - `correct()` with an access key that is not a 44-digit NF-e key — an NFSe has no correction letter; cancel and reissue instead.
+  - `correct()` with an access key that is not an NF-e access key (44 characters) — an NFSe has no correction letter; cancel and reissue instead.
 
 Building the full fiscal document (issuer data, service code, tax groups, schema-accurate XML) is the API's job — configured once per company, not passed on every call.
 

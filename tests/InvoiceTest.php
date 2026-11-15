@@ -373,6 +373,47 @@ final class InvoiceTest extends TestCase
     }
 
     /**
+     * An NF-e key: 6 digits (cUF + AAMM), the 12 base characters of the
+     * issuer CNPJ — alphanumeric from July 2026 — then 26 digits.
+     */
+    private static function nfeKey(string $cnpjBase): string
+    {
+        return '352607' . $cnpjBase . str_repeat('0', 25) . '1';
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function nfeKeys(): array
+    {
+        return [
+            '44 digits' => [self::nfeKey('123456780001')],
+            'alphanumeric cnpj' => [self::nfeKey('12ABC3450001')],
+            'all-letter cnpj base' => [self::nfeKey('ABCDEFGHIJKL')],
+        ];
+    }
+
+    #[DataProvider('nfeKeys')]
+    public function testCorrectAcceptsAnNfeKey(string $accessKey): void
+    {
+        $this->assertSame(44, strlen($accessKey));
+        $mock = new MockHandler([
+            new Response(200, ['Content-Type' => 'application/json'], (string) json_encode([
+                'result' => ['status' => 'authorized'],
+            ])),
+        ]);
+        $invoice = new Invoice(apiKey: 'key', baseUrl: 'https://example.com');
+        $this->injectMockHttpClient($invoice, $mock);
+
+        $invoice->correct($accessKey, DocumentType::NFE, 'Transportadora corrigida');
+
+        $this->assertSame(
+            "/api/v1/invoices/{$accessKey}/correction",
+            $mock->getLastRequest()?->getUri()->getPath(),
+        );
+    }
+
+    /**
      * @return array<string, array{string}>
      */
     public static function nonNfeKeys(): array
@@ -381,13 +422,17 @@ final class InvoiceTest extends TestCase
             'nfse key (50 digits)' => [str_repeat('1', 50)],
             '43 digits' => [str_repeat('1', 43)],
             '45 digits' => [str_repeat('1', 45)],
+            'lowercase cnpj' => [self::nfeKey('12abc3450001')],
+            'letter before the cnpj' => ['35260A' . '123456780001' . str_repeat('0', 26)],
+            'letter after the cnpj base' => ['352607' . '123456780001' . 'A' . str_repeat('0', 25)],
             'letters' => ['abc123'],
+            'trailing newline' => [self::nfeKey('123456780001') . "\n"],
             'empty' => [''],
         ];
     }
 
     #[DataProvider('nonNfeKeys')]
-    public function testCorrectRefusesAKeyThatIsNotA44DigitNfeKey(string $accessKey): void
+    public function testCorrectRefusesAKeyThatIsNotAnNfeKey(string $accessKey): void
     {
         $mock = new MockHandler([]);
         $invoice = new Invoice(apiKey: 'key', baseUrl: 'https://example.com');
