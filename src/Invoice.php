@@ -91,6 +91,57 @@ final class Invoice extends Client
     }
 
     /**
+     * Typographic characters above U+00FF that the API converts before
+     * checking (quotes, dashes, ellipsis, bullet, euro, trademark), so the
+     * SDK must not refuse them.
+     */
+    private const NFE_CONVERTED_CHARS = [
+        0x2018, 0x2019, 0x201A, 0x201C, 0x201D, 0x201E,
+        0x2013, 0x2014, 0x2212, 0x2026, 0x2022, 0x20AC, 0x2122,
+    ];
+
+    /**
+     * Rejects the first free-text field holding a character the NF-e cannot
+     * carry: above U+00FF and not one of the characters the API converts.
+     * Anything up to U+00FF (tab, newline and CR included) is let through —
+     * the API folds whitespace runs itself.
+     *
+     * @param Product[] $items
+     */
+    private static function validateNfeLatin1(
+        string $clientName,
+        array $items,
+        ?Address $address,
+    ): void {
+        $fields = ['client_name' => $clientName];
+        foreach ($items as $index => $item) {
+            $fields["items[{$index}].description"] = $item->description;
+            $fields["items[{$index}].unit"] = $item->unit;
+            $fields["items[{$index}].purchase_order"] = $item->purchaseOrder;
+            $fields["items[{$index}].purchase_order_item"] = $item->purchaseOrderItem;
+            $fields["items[{$index}].observations"] = $item->observations;
+        }
+        foreach ($address?->toArray() ?? [] as $key => $value) {
+            $fields["recipient_address.{$key}"] = $value;
+        }
+
+        foreach ($fields as $path => $value) {
+            if ($value === null) {
+                continue;
+            }
+            foreach (mb_str_split($value, 1, 'UTF-8') as $char) {
+                $code = mb_ord($char, 'UTF-8');
+                if ($code > 0xFF && !in_array($code, self::NFE_CONVERTED_CHARS, true)) {
+                    throw new InvoiceError(
+                        "{$path} contains a character outside ISO-8859-1 (latin1), "
+                        . "which NF-e does not accept: '{$char}'",
+                    );
+                }
+            }
+        }
+    }
+
+    /**
      * Issues a fiscal document.
      *
      * Pass $idempotencyKey to make a retry safe: the same key with the same
@@ -121,8 +172,14 @@ final class Invoice extends Client
                 if (!$item->cfop) {
                     throw new InvoiceError("items[{$index}].cfop is required for NFE");
                 }
+                if (mb_strlen($item->description) > 120) {
+                    throw new InvoiceError(
+                        "items[{$index}].description exceeds 120 characters (NF-e xProd limit)",
+                    );
+                }
             }
             self::validateNfeAddress($recipientAddress);
+            self::validateNfeLatin1($clientName, $items, $recipientAddress);
         }
 
         if ($documentType === DocumentType::NFSE) {
@@ -226,6 +283,13 @@ final class Invoice extends Client
     /**
      * Files a correction letter (CC-e) against an issued document.
      *
+     * NF-e only: a key that is not an NF-e access key (44 characters;
+     * the issuer CNPJ in it may be alphanumeric) is refused locally with
+     * InvoiceError — an NFS-e has no correction letter, so cancel and
+     * reissue it instead. An NF-e key sent with
+     * DocumentType::NFSE, or one the API does not hold, still comes back
+     * from the API as an ApiError with status 409.
+     *
      * @return array<string, mixed>
      */
     public function correct(
@@ -233,6 +297,11 @@ final class Invoice extends Client
         DocumentType $documentType,
         string $correction,
     ): array {
+        if (preg_match('/^[0-9]{6}[0-9A-Z]{12}[0-9]{26}$/D', $accessKey) !== 1) {
+            throw new InvoiceError(
+                'correct is NFe only. NFSe has no correction letter — cancel and reissue instead.',
+            );
+        }
         $length = mb_strlen($correction);
         if ($length < 15 || $length > 1000) {
             throw new InvoiceError('correction must be 15 to 1000 characters');

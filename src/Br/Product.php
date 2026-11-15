@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Stackin\Br;
 
+use Stackin\Errors\InvoiceError;
+
 /**
  * One product or service line item on an invoice.
  *
@@ -11,6 +13,12 @@ namespace Stackin\Br;
  * document type. The rest are
  * Brazil-specific and required per item only when document_type is
  * NFE — ignored for NFSE.
+ *
+ * Field formats are checked when the item is built and raise
+ * InvoiceError: `ncm` must be the full 8 digits, or 00 for a service
+ * line (SEFAZ rejects any other 2-digit chapter with 777), and
+ * `barcode` (cEAN) must be `SEM GTIN` or a GTIN of 8, 12, 13 or 14
+ * digits whose GS1 check digit is right.
  */
 final class Product
 {
@@ -52,6 +60,37 @@ final class Product
         /** @var array<string, mixed>|null */
         public readonly ?array $ibsCbs = null,
     ) {
+        if ($ncm !== null && preg_match('/^(00|\d{8})$/', $ncm) !== 1) {
+            throw new InvoiceError(
+                'ncm must be the full 8 digits, or 00 for a service line; '
+                . 'SEFAZ rejects any other code (777)',
+            );
+        }
+        if ($barcode !== null && preg_match('/^(SEM GTIN|\d{8}|\d{12,14})$/', $barcode) !== 1) {
+            throw new InvoiceError(
+                "barcode must be 'SEM GTIN' or a GTIN of 8, 12, 13 or 14 digits",
+            );
+        }
+        if ($barcode !== null && $barcode !== 'SEM GTIN' && !self::validGtinCheckDigit($barcode)) {
+            throw new InvoiceError('barcode has an invalid GTIN check digit');
+        }
+    }
+
+    /**
+     * GS1 modulo-10: from the rightmost digit before the check digit,
+     * weights alternate 3, 1, 3, 1...; check = (10 - sum % 10) % 10.
+     */
+    private static function validGtinCheckDigit(string $gtin): bool
+    {
+        $body = substr($gtin, 0, -1);
+        $sum = 0;
+        $weight = 3;
+        for ($i = strlen($body) - 1; $i >= 0; $i--) {
+            $sum += (int) $body[$i] * $weight;
+            $weight = $weight === 3 ? 1 : 3;
+        }
+
+        return (10 - $sum % 10) % 10 === (int) substr($gtin, -1);
     }
 
     private static function decimalString(?float $value): ?string

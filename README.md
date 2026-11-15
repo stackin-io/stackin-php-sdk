@@ -167,8 +167,15 @@ The original document does not change — the CC-e is an event attached to it, a
 the authorized XML stays as it was. A document accepts at most 20 of them, and
 they are numbered for you.
 
-**NF-e only.** NFS-e has no correction letter, and asking for one returns
-a `409`.
+**NF-e only.** NFS-e has no correction letter. The access key already says
+which one it is — an NF-e access key is 44 characters, an NFS-e key 50 digits —
+so a key that is not an NF-e access key is refused locally, before the call,
+with an `InvoiceError`:
+`correct is NFe only. NFSe has no correction letter — cancel and reissue instead.`
+From July 2026 the issuer CNPJ inside the key may be alphanumeric, so its first
+12 characters accept `0-9` and `A-Z` (uppercase); the rest of the key is digits.
+What only the API can know is still an `ApiError` with status `409`: an NF-e
+key sent with `DocumentType::NFSE`, or a key for a document the API does not hold.
 
 ## Invalidating unused numbers
 
@@ -266,7 +273,13 @@ Three things worth knowing before you loop:
 - `Stackin\Errors\ConnectionFailedError` — the API didn't respond (network/DNS/timeout).
 - `Stackin\Errors\InvoiceError` — a request that would obviously fail server-side, caught before the network call:
   - `issue()`'s items is empty, missing `ncm`/`cfop` on an item for NFE, or a missing/incomplete recipient `Address` on NFE.
+  - a `Product` built with an `ncm` that is not the full 8 digits, or `00` for a service line — SEFAZ rejects any other 2-digit chapter with `777`.
+  - a `Product` built with a `barcode` (cEAN) that is neither `SEM GTIN` nor 8, 12, 13 or 14 digits, or whose GS1 check digit is wrong.
+  - an NFE item `description` over 120 characters (the xProd limit; NFSE descriptions are not limited).
+  - an `Address` built with a `street` or `neighborhood` under 2 characters after trimming.
+  - on NFE, any free-text field (`client_name`, item `description`/`unit`/`purchase_order`/`purchase_order_item`/`observations`, every recipient `Address` field) holding a character the NF-e cannot carry: anything above ISO-8859-1 (U+00FF) — emoji, CJK, Cyrillic… — is refused. Accents, tabs and newlines are fine, and typographic quotes, dashes, ellipsis, bullet, `€` and `™` are converted by the API, so they are let through. NFSE is not checked.
   - an NFSE where any item has `taxRetained: true` (ISSQN retained by the tomador) but the recipient `Address` is missing or lacks any field other than `cityCode`.
+  - `correct()` with an access key that is not an NF-e access key (44 characters) — an NFSe has no correction letter; cancel and reissue instead.
 
 Building the full fiscal document (issuer data, service code, tax groups, schema-accurate XML) is the API's job — configured once per company, not passed on every call.
 
