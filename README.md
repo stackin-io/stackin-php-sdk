@@ -165,8 +165,12 @@ The original document does not change — the CC-e is an event attached to it, a
 the authorized XML stays as it was. A document accepts at most 20 of them, and
 they are numbered for you.
 
-**NF-e only.** NFS-e has no correction letter, and asking for one returns
-a `409`.
+**NF-e only.** NFS-e has no correction letter. The access key already says
+which one it is — an NF-e key is 44 digits, an NFS-e key 50 — so a key that is
+not 44 digits is refused locally, before the call, with an `InvoiceError`:
+`correct is NFe only. NFSe has no correction letter — cancel and reissue instead.`
+What only the API can know is still an `ApiError` with status `409`: a 44-digit
+key sent with `DocumentType::NFSE`, or a key for a document the API does not hold.
 
 ## Invalidating unused numbers
 

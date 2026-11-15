@@ -184,8 +184,11 @@ final class Invoice extends Client
     /**
      * Files a correction letter (CC-e) against an issued document.
      *
-     * NF-e only: the access key must be the 44-digit NF-e key. An NFS-e
-     * has no correction letter — cancel and reissue it instead.
+     * NF-e only: a key that is not the 44-digit NF-e key is refused
+     * locally with InvoiceError — an NFS-e has no correction letter, so
+     * cancel and reissue it instead. A 44-digit key sent with
+     * DocumentType::NFSE, or one the API does not hold, still comes back
+     * from the API as an ApiError with status 409.
      *
      * @return array<string, mixed>
      */
