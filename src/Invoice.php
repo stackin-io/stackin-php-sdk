@@ -53,6 +53,45 @@ final class Invoice extends Client
     }
 
     /**
+     * Rejects the first free-text field holding a character outside
+     * ISO-8859-1 printable (U+0020..U+00FF) — the NF-e does not accept one.
+     *
+     * @param Product[] $items
+     */
+    private static function validateNfeLatin1(
+        string $clientName,
+        array $items,
+        ?Address $address,
+    ): void {
+        $fields = ['client_name' => $clientName];
+        foreach ($items as $index => $item) {
+            $fields["items[{$index}].description"] = $item->description;
+            $fields["items[{$index}].unit"] = $item->unit;
+            $fields["items[{$index}].purchase_order"] = $item->purchaseOrder;
+            $fields["items[{$index}].purchase_order_item"] = $item->purchaseOrderItem;
+            $fields["items[{$index}].observations"] = $item->observations;
+        }
+        foreach ($address?->toArray() ?? [] as $key => $value) {
+            $fields["recipient_address.{$key}"] = $value;
+        }
+
+        foreach ($fields as $path => $value) {
+            if ($value === null) {
+                continue;
+            }
+            foreach (mb_str_split($value, 1, 'UTF-8') as $char) {
+                $code = mb_ord($char, 'UTF-8');
+                if ($code < 0x20 || $code > 0xFF) {
+                    throw new InvoiceError(
+                        "{$path} contains a character outside ISO-8859-1 (latin1), "
+                        . "which NF-e does not accept: '{$char}'",
+                    );
+                }
+            }
+        }
+    }
+
+    /**
      * Issues a fiscal document.
      *
      * Pass $idempotencyKey to make a retry safe: the same key with the same
@@ -85,6 +124,7 @@ final class Invoice extends Client
                 }
             }
             self::validateNfeAddress($recipientAddress);
+            self::validateNfeLatin1($clientName, $items, $recipientAddress);
         }
 
         $payload = [
