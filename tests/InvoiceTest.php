@@ -9,6 +9,7 @@ use GuzzleHttp\Handler\MockHandler;
 use GuzzleHttp\HandlerStack;
 use GuzzleHttp\Middleware;
 use GuzzleHttp\Psr7\Response;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use ReflectionProperty;
 use Stackin\Address;
@@ -89,6 +90,229 @@ final class InvoiceTest extends TestCase
             '123',
             [new Product(description: 'Widget', amount: 10.0)],
         );
+    }
+
+    private function okInvoice(): Invoice
+    {
+        $mock = new MockHandler([
+            new Response(200, ['Content-Type' => 'application/json'], (string) json_encode([
+                'result' => ['access_key' => 'abc123'],
+            ])),
+        ]);
+        $invoice = new Invoice(apiKey: 'key', baseUrl: 'https://example.com');
+        $this->injectMockHttpClient($invoice, $mock);
+
+        return $invoice;
+    }
+
+    public function testIssueRejectsAnNfeDescriptionOver120Characters(): void
+    {
+        $this->expectException(InvoiceError::class);
+        $this->expectExceptionMessage(
+            'items[1].description exceeds 120 characters (NF-e xProd limit)',
+        );
+
+        $this->okInvoice()->issue(
+            DocumentType::NFE,
+            'Acme',
+            '123',
+            [
+                new Product(description: 'Widget', amount: 10.0, ncm: '12345678', cfop: '5102'),
+                new Product(
+                    description: str_repeat('é', 121),
+                    amount: 10.0,
+                    ncm: '12345678',
+                    cfop: '5102',
+                ),
+            ],
+            $this->validNfeAddress(),
+        );
+    }
+
+    public function testIssueAcceptsAnNfeDescriptionOf120Characters(): void
+    {
+        $result = $this->okInvoice()->issue(
+            DocumentType::NFE,
+            'Acme',
+            '123',
+            [
+                new Product(
+                    description: str_repeat('é', 120),
+                    amount: 10.0,
+                    ncm: '12345678',
+                    cfop: '5102',
+                ),
+            ],
+            $this->validNfeAddress(),
+        );
+
+        $this->assertSame('abc123', $result['access_key']);
+    }
+
+    public function testIssueAcceptsLatin1AccentsOnNfe(): void
+    {
+        $result = $this->okInvoice()->issue(
+            DocumentType::NFE,
+            'Açaí & Pão Ltda',
+            '123',
+            [
+                new Product(
+                    description: 'Café orgânico ÿ',
+                    amount: 10.0,
+                    ncm: '12345678',
+                    cfop: '5102',
+                ),
+            ],
+            new Address(
+                state: 'SP',
+                cityCode: '3550308',
+                street: 'Avenida São João',
+                number: '1',
+                neighborhood: 'República',
+                city: 'São Paulo',
+                zipCode: '01035000',
+            ),
+        );
+
+        $this->assertSame('abc123', $result['access_key']);
+    }
+
+    /**
+     * @return array<string, array{string, string, string, string, string, string}>
+     */
+    public static function nonLatin1Fields(): array
+    {
+        return [
+            'check mark in client name' => ['Acme ✓', 'Widget', 'UN', 'Rua das Flores',
+                'client_name', '✓'],
+            'emoji in description' => ['Acme', 'Widget 🔥', 'UN', 'Rua das Flores',
+                'items[0].description', '🔥'],
+            'cjk in unit' => ['Acme', 'Widget', '中', 'Rua das Flores', 'items[0].unit', '中'],
+            'cyrillic in street' => ['Acme', 'Widget', 'UN', 'Rua Ж', 'recipient_address.street',
+                'Ж'],
+        ];
+    }
+
+    #[DataProvider('nonLatin1Fields')]
+    public function testIssueRejectsNonLatin1TextOnNfe(
+        string $clientName,
+        string $description,
+        string $unit,
+        string $street,
+        string $path,
+        string $char,
+    ): void {
+        $this->expectException(InvoiceError::class);
+        $this->expectExceptionMessage(
+            "{$path} contains a character outside ISO-8859-1 (latin1), "
+            . "which NF-e does not accept: '{$char}'",
+        );
+
+        $this->okInvoice()->issue(
+            DocumentType::NFE,
+            $clientName,
+            '123',
+            [
+                new Product(
+                    description: $description,
+                    amount: 10.0,
+                    unit: $unit,
+                    ncm: '12345678',
+                    cfop: '5102',
+                ),
+            ],
+            new Address(
+                state: 'SC',
+                cityCode: '4209102',
+                street: $street,
+                number: '1200',
+                neighborhood: 'Centro',
+                city: 'Joinville',
+                zipCode: '89201100',
+            ),
+        );
+    }
+
+    public function testIssueRejectsNonLatin1InPurchaseOrderAndObservationsOnNfe(): void
+    {
+        $this->expectException(InvoiceError::class);
+        $this->expectExceptionMessage('items[0].purchase_order contains a character outside');
+
+        $this->okInvoice()->issue(
+            DocumentType::NFE,
+            'Acme',
+            '123',
+            [
+                new Product(
+                    description: 'Widget',
+                    amount: 10.0,
+                    purchaseOrder: 'PO🔥1',
+                    ncm: '12345678',
+                    cfop: '5102',
+                    observations: 'nota 中',
+                ),
+            ],
+            $this->validNfeAddress(),
+        );
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function textTheApiAccepts(): array
+    {
+        return [
+            'typographic characters the API converts' => ['“Teclado” — 2 un… €10™'],
+            'more converted characters' => ['‘a’ ‚b„ –c − •d'],
+            'tab, newline and CR' => ["a\tb\nc\r"],
+            'latin1 accents' => ['é ç ã'],
+        ];
+    }
+
+    #[DataProvider('textTheApiAccepts')]
+    public function testIssueAcceptsTextTheApiCarriesOrConvertsOnNfe(string $text): void
+    {
+        $result = $this->okInvoice()->issue(
+            DocumentType::NFE,
+            $text,
+            '123',
+            [
+                new Product(
+                    description: $text,
+                    amount: 10.0,
+                    ncm: '12345678',
+                    cfop: '5102',
+                    observations: $text,
+                ),
+            ],
+            $this->validNfeAddress(),
+        );
+
+        $this->assertSame('abc123', $result['access_key']);
+    }
+
+    public function testIssueAllowsNonLatin1TextOnNfse(): void
+    {
+        $result = $this->okInvoice()->issue(
+            DocumentType::NFSE,
+            'Acme ✓',
+            '123',
+            [new Product(description: 'Consultoria — 😀', amount: 10.0)],
+        );
+
+        $this->assertSame('abc123', $result['access_key']);
+    }
+
+    public function testIssueDoesNotLimitAnNfseDescription(): void
+    {
+        $result = $this->okInvoice()->issue(
+            DocumentType::NFSE,
+            'Acme',
+            '123',
+            [new Product(description: str_repeat('a', 500), amount: 10.0)],
+        );
+
+        $this->assertSame('abc123', $result['access_key']);
     }
 
     public function testIssuePostsToInvoicesEndpointWithAuthHeader(): void
