@@ -269,6 +269,51 @@ final class ProductTest extends TestCase
     /**
      * @return array<string, array{string}>
      */
+    public static function validNcms(): array
+    {
+        return [
+            'eight digits' => ['84713012'],
+            'service line' => ['00'],
+        ];
+    }
+
+    #[DataProvider('validNcms')]
+    public function testAcceptsAnEightDigitNcmOr00(string $ncm): void
+    {
+        $product = new Product(description: 'Teclado', amount: 10.0, ncm: $ncm);
+
+        $this->assertSame($ncm, $product->toArray()['product']['br']['ncm']);
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function invalidNcms(): array
+    {
+        return [
+            'two-digit chapter 84' => ['84'],
+            'two-digit chapter 12' => ['12'],
+            'seven digits' => ['8471301'],
+            'nine digits' => ['847130120'],
+            'with dots' => ['8471.30.12'],
+            'empty' => [''],
+        ];
+    }
+
+    #[DataProvider('invalidNcms')]
+    public function testRejectsAnNcmThatIsNotEightDigitsOr00(string $ncm): void
+    {
+        $this->expectException(InvoiceError::class);
+        $this->expectExceptionMessage(
+            'ncm must be the full 8 digits, or 00 for a service line',
+        );
+
+        new Product(description: 'Teclado', amount: 10.0, ncm: $ncm);
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
     public static function validBarcodes(): array
     {
         return [
