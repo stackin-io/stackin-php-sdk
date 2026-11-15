@@ -268,6 +268,7 @@ Three things worth knowing before you loop:
   - a `Product` built with a `barcode` (cEAN) that is neither `SEM GTIN` nor 8, 12, 13 or 14 digits.
   - an NFE item `description` over 120 characters (the xProd limit; NFSE descriptions are not limited).
   - an `Address` built with a `street` or `neighborhood` under 2 characters after trimming.
+  - on NFE, any free-text field (`client_name`, item `description`/`unit`/`purchase_order`/`purchase_order_item`/`observations`, every recipient `Address` field) holding a character outside ISO-8859-1 printable (U+0020..U+00FF) — accents are fine, emoji, `—`, `€` or a tab are not. NFSE is not checked.
 
 Building the full fiscal document (issuer data, service code, tax groups, schema-accurate XML) is the API's job — configured once per company, not passed on every call.
 
