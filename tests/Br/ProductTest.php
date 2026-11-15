@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Stackin\Tests\Br;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Stackin\Br\Product;
+use Stackin\Errors\InvoiceError;
 
 final class ProductTest extends TestCase
 {
@@ -262,5 +264,81 @@ final class ProductTest extends TestCase
         $product = new Product(description: 'Teclado', unitPrice: 10.00);
 
         $this->assertArrayNotHasKey('br', $product->toArray()['product']);
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function validBarcodes(): array
+    {
+        return [
+            'sem gtin' => ['SEM GTIN'],
+            'gtin-8' => ['96385074'],
+            'gtin-12' => ['036000291452'],
+            'gtin-13' => ['4006381333931'],
+            'gtin-14' => ['17891234567892'],
+        ];
+    }
+
+    #[DataProvider('validBarcodes')]
+    public function testAcceptsAValidBarcode(string $barcode): void
+    {
+        $product = new Product(description: 'Teclado', amount: 10.0, barcode: $barcode);
+
+        $this->assertSame($barcode, $product->toArray()['product']['barcode']);
+    }
+
+    /**
+     * GS1 modulo-10, computed independently of the SDK so the vectors are
+     * not just echoing the implementation.
+     */
+    private static function checkDigit(string $body): int
+    {
+        $digits = array_reverse(str_split($body));
+        $sum = 0;
+        foreach ($digits as $position => $digit) {
+            $sum += (int) $digit * ($position % 2 === 0 ? 3 : 1);
+        }
+
+        return (10 - $sum % 10) % 10;
+    }
+
+    public function testTheVectorsCarryTheirComputedCheckDigit(): void
+    {
+        $this->assertSame(4, self::checkDigit('9638507'));
+        $this->assertSame(2, self::checkDigit('03600029145'));
+        $this->assertSame(1, self::checkDigit('400638133393'));
+        $this->assertSame(5, self::checkDigit('789123456789'));
+        $this->assertSame(2, self::checkDigit('1789123456789'));
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function wrongCheckDigits(): array
+    {
+        return [
+            'gtin-8' => ['96385075'],
+            'gtin-12' => ['036000291453'],
+            'gtin-13' => ['4006381333932'],
+            'gtin-14 from the issue' => ['17891234567894'],
+            'gtin-14 off by one' => ['17891234567891'],
+        ];
+    }
+
+    #[DataProvider('wrongCheckDigits')]
+    public function testRejectsAWrongGtinCheckDigit(string $barcode): void
+    {
+        $this->expectException(InvoiceError::class);
+        $this->expectExceptionMessage('barcode has an invalid GTIN check digit');
+
+        new Product(description: 'Teclado', amount: 10.0, barcode: $barcode);
+    }
+
+    public function testAcceptsAValidGtin13(): void
+    {
+        $product = new Product(description: 'Teclado', amount: 10.0, barcode: '7891234567895');
+
+        $this->assertSame('7891234567895', $product->toArray()['product']['barcode']);
     }
 }
