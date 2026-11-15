@@ -310,4 +310,51 @@ final class ProductTest extends TestCase
 
         new Product(description: 'Teclado', amount: 10.0, ncm: $ncm);
     }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function validBarcodes(): array
+    {
+        return [
+            'sem gtin' => ['SEM GTIN'],
+            'gtin-8' => ['96385074'],
+            'gtin-12' => ['036000291452'],
+            'gtin-13' => ['4006381333931'],
+            'gtin-14' => ['17891234567892'],
+        ];
+    }
+
+    #[DataProvider('validBarcodes')]
+    public function testAcceptsAValidBarcode(string $barcode): void
+    {
+        $product = new Product(description: 'Teclado', amount: 10.0, barcode: $barcode);
+
+        $this->assertSame($barcode, $product->toArray()['product']['barcode']);
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function malformedBarcodes(): array
+    {
+        return [
+            'seven digits' => ['1234567'],
+            'nine digits' => ['123456789'],
+            'eleven digits' => ['12345678901'],
+            'fifteen digits' => ['123456789012345'],
+            'lowercase sem gtin' => ['sem gtin'],
+            'letters' => ['ABCDEFGH'],
+            'empty' => [''],
+        ];
+    }
+
+    #[DataProvider('malformedBarcodes')]
+    public function testRejectsAMalformedBarcode(string $barcode): void
+    {
+        $this->expectException(InvoiceError::class);
+        $this->expectExceptionMessage("barcode must be 'SEM GTIN' or a GTIN of 8, 12, 13 or 14");
+
+        new Product(description: 'Teclado', amount: 10.0, barcode: $barcode);
+    }
 }
