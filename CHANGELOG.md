@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Features
+- **client:** `externalReference` on `issue()` — the caller's own id for the document, sent as `external_reference`, returned on every read and webhook.
+- **client:** `cityCode` is no longer required on an NFE recipient `Address`; the API resolves it from city and state (`CITY_NOT_FOUND`, 422, when it cannot).
+
 ## v0.11.0 — 2026-11-15
 
 ### Features

@@ -84,8 +84,8 @@ $result = $invoice->issue(
         city: 'Florianopolis',
         state: 'SC',
         zipCode: '88010000',
-        cityCode: '4205407',
     ),
+    externalReference: 'order-1234',
 );
 
 $status = $invoice->consult('ACCESS_KEY...', DocumentType::NFSE);
@@ -99,7 +99,9 @@ file_put_contents(
 );
 ```
 
-The recipient `Address` passed to `issue()` is the buyer's address — **required for NFE**. On NFE every field is required, `cityCode` (the 7-digit IBGE municipality code) included: it becomes `enderDest` on the wire and the SEFAZ rejects a partial one. `state` is also what resolves `idDest` — a buyer in another state is emitted as an interstate operation automatically. A missing or incomplete address throws an `InvoiceError` locally, before the request goes out.
+`externalReference` is your own id for the document — an order number, a ticket. It is stored as sent (up to 255 characters), returned on every read and webhook, and left out of the request when not given.
+
+The recipient `Address` passed to `issue()` is the buyer's address — **required for NFE**. On NFE street, number, neighborhood, city, state and zip code are required: it becomes `enderDest` on the wire and the SEFAZ rejects a partial one. `cityCode` (the 7-digit IBGE municipality code) may be left out — the API resolves it from city and state, and answers `CITY_NOT_FOUND` (422) when it cannot; send it yourself when the city name is ambiguous. `state` is also what resolves `idDest` — a buyer in another state is emitted as an interstate operation automatically. A missing or incomplete address throws an `InvoiceError` locally, before the request goes out.
 
 On NFSE it is the tomador's address: optional, except when any item has `taxRetained: true` (ISSQN retained by the tomador), where the city authorizer refuses the document without it. Then it is required and complete — every field except `cityCode` — and a missing or incomplete one also throws an `InvoiceError` locally.
 
@@ -272,7 +274,7 @@ Three things worth knowing before you loop:
 - `Stackin\Errors\ApiError` — the API responded with a non-2xx status (`statusCode`/`detail` properties) — a 401 here means `api_key` is missing, wrong, or was rotated.
 - `Stackin\Errors\ConnectionFailedError` — the API didn't respond (network/DNS/timeout).
 - `Stackin\Errors\InvoiceError` — a request that would obviously fail server-side, caught before the network call:
-  - `issue()`'s items is empty, missing `ncm`/`cfop` on an item for NFE, or a missing/incomplete recipient `Address` on NFE.
+  - `issue()`'s items is empty, missing `ncm`/`cfop` on an item for NFE, or a missing/incomplete recipient `Address` on NFE (any field but `cityCode`).
   - a `Product` built with an `ncm` that is not the full 8 digits, or `00` for a service line — SEFAZ rejects any other 2-digit chapter with `777`.
   - a `Product` built with a `barcode` (cEAN) that is neither `SEM GTIN` nor 8, 12, 13 or 14 digits, or whose GS1 check digit is wrong.
   - an NFE item `description` over 120 characters (the xProd limit; NFSE descriptions are not limited).
