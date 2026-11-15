@@ -41,7 +41,7 @@
     },
     "scripts": {
         "test": "phpunit tests",
-        "lint": "phpcs --standard=.code_quality/phpcs.xml",
+        "lint": "phpcs --standard=.code_quality/phpcs.xml src tests",
         "analyse": "phpstan analyse -c .code_quality/phpstan.neon"
     }
 }
