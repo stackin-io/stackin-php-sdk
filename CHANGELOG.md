@@ -1,3 +1,29 @@
+# Changelog
+
+## v0.11.0 — 2026-11-15
+
+### Features
+- **invoice:** require recipient address for retained ISS on NFS-e
+- **invoice:** require a 44-digit NF-e key on correct()
+- **product:** validate the GTIN check digit
+- **invoice:** reject non-latin1 text on NF-e before sending
+- **validation:** mirror NF-e XSD 4.00 field rules locally
+
+### Bug Fixes
+- **invoice:** refuse only text the NF-e cannot carry
+- **invoice:** accept an alphanumeric CNPJ in the correct() key
+- **invoice:** require a complete address for retained ISS on NFS-e
+- **product:** accept only 8-digit NCM or 00
+
+### Docs
+- **invoice:** say which correct() cases stay an API 409
+
+### CI
+- **lint:** pass src and tests to phpcs explicitly
+
+### Chores
+- **platform:** install action-platform
+
 # Changelog — stackin (PHP SDK)
 
 ## 0.1.2
