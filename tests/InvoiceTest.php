@@ -540,6 +540,49 @@ final class InvoiceTest extends TestCase
         $this->assertArrayNotHasKey('idempotencyKey', $body);
     }
 
+    public function testIssueSendsExternalReferenceWhenGiven(): void
+    {
+        $mock = new MockHandler([
+            new Response(200, ['Content-Type' => 'application/json'], (string) json_encode([
+                'result' => ['access_key' => 'abc123'],
+            ])),
+        ]);
+        $invoice = new Invoice(apiKey: 'key', baseUrl: 'https://example.com');
+        $this->injectMockHttpClient($invoice, $mock);
+
+        $invoice->issue(
+            DocumentType::NFSE,
+            'Acme',
+            '123',
+            [new Product(description: 'Widget', amount: 10.0)],
+            externalReference: 'order-1234',
+        );
+
+        $body = json_decode((string) $mock->getLastRequest()->getBody(), true);
+        $this->assertSame('order-1234', $body['external_reference']);
+    }
+
+    public function testIssueOmitsExternalReferenceByDefault(): void
+    {
+        $mock = new MockHandler([
+            new Response(200, ['Content-Type' => 'application/json'], (string) json_encode([
+                'result' => ['access_key' => 'abc123'],
+            ])),
+        ]);
+        $invoice = new Invoice(apiKey: 'key', baseUrl: 'https://example.com');
+        $this->injectMockHttpClient($invoice, $mock);
+
+        $invoice->issue(
+            DocumentType::NFSE,
+            'Acme',
+            '123',
+            [new Product(description: 'Widget', amount: 10.0)],
+        );
+
+        $body = json_decode((string) $mock->getLastRequest()->getBody(), true);
+        $this->assertArrayNotHasKey('external_reference', $body);
+    }
+
     public function testReissueSendsIdempotencyKeyHeaderWhenGiven(): void
     {
         $mock = new MockHandler([
@@ -856,7 +899,10 @@ final class InvoiceTest extends TestCase
         $invoice = new Invoice(apiKey: 'key');
 
         $this->expectException(InvoiceError::class);
-        $this->expectExceptionMessage('cityCode');
+        $this->expectExceptionMessage(
+            'recipientAddress is missing required fields for NFE: '
+            . 'street, number, neighborhood, city, zipCode',
+        );
         $invoice->issue(
             DocumentType::NFE,
             'Acme',
@@ -864,6 +910,36 @@ final class InvoiceTest extends TestCase
             [new Product(description: 'Widget', amount: 10.0, ncm: '12345678', cfop: '5102')],
             new Address(state: 'SC'),
         );
+    }
+
+    public function testIssueAcceptsAnNfeAddressWithoutCityCode(): void
+    {
+        $mock = new MockHandler([
+            new Response(200, ['Content-Type' => 'application/json'], (string) json_encode([
+                'result' => ['access_key' => 'abc123'],
+            ])),
+        ]);
+        $invoice = new Invoice(apiKey: 'key', baseUrl: 'https://example.com');
+        $this->injectMockHttpClient($invoice, $mock);
+
+        $invoice->issue(
+            DocumentType::NFE,
+            'Acme',
+            '123',
+            [new Product(description: 'Widget', amount: 10.0, ncm: '12345678', cfop: '5102')],
+            new Address(
+                state: 'SC',
+                street: 'Rua das Flores',
+                number: '1200',
+                neighborhood: 'Centro',
+                city: 'Joinville',
+                zipCode: '89201100',
+            ),
+        );
+
+        $body = json_decode((string) $mock->getLastRequest()->getBody(), true);
+        $this->assertSame('Joinville', $body['recipient_address']['city']);
+        $this->assertArrayNotHasKey('city_code', $body['recipient_address']);
     }
 
     public function testIssueAllowsNfseWithoutRecipientAddress(): void
