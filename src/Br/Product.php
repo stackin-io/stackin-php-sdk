@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Stackin\Br;
 
+use Stackin\Errors\InvoiceError;
+
 /**
  * One product or service line item on an invoice.
  *
@@ -11,6 +13,10 @@ namespace Stackin\Br;
  * document type. The rest are
  * Brazil-specific and required per item only when document_type is
  * NFE — ignored for NFSE.
+ *
+ * Field formats are checked when the item is built and raise
+ * InvoiceError: `ncm` must be the full 8 digits, or 00 for a service
+ * line (SEFAZ rejects any other 2-digit chapter with 777).
  */
 final class Product
 {
@@ -52,6 +58,12 @@ final class Product
         /** @var array<string, mixed>|null */
         public readonly ?array $ibsCbs = null,
     ) {
+        if ($ncm !== null && preg_match('/^(00|\d{8})$/', $ncm) !== 1) {
+            throw new InvoiceError(
+                'ncm must be the full 8 digits, or 00 for a service line; '
+                . 'SEFAZ rejects any other code (777)',
+            );
+        }
     }
 
     private static function decimalString(?float $value): ?string
