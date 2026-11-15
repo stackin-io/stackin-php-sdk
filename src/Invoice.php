@@ -22,7 +22,9 @@ final class Invoice extends Client
 {
     /**
      * Rejects a missing or partial buyer address before the network call —
-     * the SEFAZ rejects a partial enderDest (274/726/696/695).
+     * the SEFAZ rejects a partial enderDest (274/726/696/695). cityCode is
+     * not required: the API resolves it from city and state, and answers
+     * CITY_NOT_FOUND (422) when it cannot.
      */
     private static function validateNfeAddress(?Address $address): void
     {
@@ -30,7 +32,7 @@ final class Invoice extends Client
             throw new InvoiceError('recipientAddress is required for NFE');
         }
 
-        self::requireAddressFields($address, 'NFE', withCityCode: true);
+        self::requireAddressFields($address, 'NFE');
     }
 
     /**
@@ -53,18 +55,11 @@ final class Invoice extends Client
             );
         }
 
-        self::requireAddressFields(
-            $address,
-            'NFSE when any item has tax_retained=true',
-            withCityCode: false,
-        );
+        self::requireAddressFields($address, 'NFSE when any item has tax_retained=true');
     }
 
-    private static function requireAddressFields(
-        Address $address,
-        string $context,
-        bool $withCityCode,
-    ): void {
+    private static function requireAddressFields(Address $address, string $context): void
+    {
         $fields = [
             'street' => $address->street,
             'number' => $address->number,
@@ -73,9 +68,6 @@ final class Invoice extends Client
             'state' => $address->state,
             'zipCode' => $address->zipCode,
         ];
-        if ($withCityCode) {
-            $fields['cityCode'] = $address->cityCode;
-        }
 
         $missing = array_keys(array_filter(
             $fields,
@@ -147,6 +139,10 @@ final class Invoice extends Client
      * Pass $idempotencyKey to make a retry safe: the same key with the same
      * body replays the first response instead of issuing a second document.
      *
+     * $externalReference is the caller's own id for the document, an order
+     * number say (up to 255 characters): stored as sent and returned on every
+     * read and webhook. It is left out of the request when null.
+     *
      * @param Product[] $items
      * @return array<string, mixed>
      */
@@ -159,6 +155,7 @@ final class Invoice extends Client
         ?string $series = null,
         ?string $number = null,
         ?string $idempotencyKey = null,
+        ?string $externalReference = null,
     ): array {
         if ($items === []) {
             throw new InvoiceError("items can't be empty");
@@ -200,6 +197,9 @@ final class Invoice extends Client
         }
         if ($number !== null) {
             $payload['number'] = $number;
+        }
+        if ($externalReference !== null) {
+            $payload['external_reference'] = $externalReference;
         }
 
         return $this->request(
