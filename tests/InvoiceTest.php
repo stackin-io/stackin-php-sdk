@@ -139,14 +139,13 @@ final class InvoiceTest extends TestCase
     public static function nonLatin1Fields(): array
     {
         return [
-            'client name' => ['Acme ✓', 'Widget', 'UN', 'Rua das Flores', 'client_name', '✓'],
-            'description' => ['Acme', 'Widget — azul', 'UN', 'Rua das Flores',
-                'items[0].description', '—'],
-            'unit' => ['Acme', 'Widget', 'm²€', 'Rua das Flores', 'items[0].unit', '€'],
-            'emoji in street' => ['Acme', 'Widget', 'UN', 'Rua 😀', 'recipient_address.street',
-                '😀'],
-            'control character' => ['Acme', "Wid\tget", 'UN', 'Rua das Flores',
-                'items[0].description', "\t"],
+            'check mark in client name' => ['Acme ✓', 'Widget', 'UN', 'Rua das Flores',
+                'client_name', '✓'],
+            'emoji in description' => ['Acme', 'Widget 🔥', 'UN', 'Rua das Flores',
+                'items[0].description', '🔥'],
+            'cjk in unit' => ['Acme', 'Widget', '中', 'Rua das Flores', 'items[0].unit', '中'],
+            'cyrillic in street' => ['Acme', 'Widget', 'UN', 'Rua Ж', 'recipient_address.street',
+                'Ж'],
         ];
     }
 
@@ -203,14 +202,49 @@ final class InvoiceTest extends TestCase
                 new Product(
                     description: 'Widget',
                     amount: 10.0,
-                    purchaseOrder: 'PO→1',
+                    purchaseOrder: 'PO🔥1',
                     ncm: '12345678',
                     cfop: '5102',
-                    observations: 'nota ✓',
+                    observations: 'nota 中',
                 ),
             ],
             $this->validNfeAddress(),
         );
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function textTheApiAccepts(): array
+    {
+        return [
+            'typographic characters the API converts' => ['“Teclado” — 2 un… €10™'],
+            'more converted characters' => ['‘a’ ‚b„ –c − •d'],
+            'tab, newline and CR' => ["a\tb\nc\r"],
+            'latin1 accents' => ['é ç ã'],
+        ];
+    }
+
+    #[DataProvider('textTheApiAccepts')]
+    public function testIssueAcceptsTextTheApiCarriesOrConvertsOnNfe(string $text): void
+    {
+        $result = $this->okInvoice()->issue(
+            DocumentType::NFE,
+            $text,
+            '123',
+            [
+                new Product(
+                    description: $text,
+                    amount: 10.0,
+                    ncm: '12345678',
+                    cfop: '5102',
+                    observations: $text,
+                ),
+            ],
+            $this->validNfeAddress(),
+        );
+
+        $this->assertSame('abc123', $result['access_key']);
     }
 
     public function testIssueAllowsNonLatin1TextOnNfse(): void

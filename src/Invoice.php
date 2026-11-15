@@ -53,8 +53,20 @@ final class Invoice extends Client
     }
 
     /**
-     * Rejects the first free-text field holding a character outside
-     * ISO-8859-1 printable (U+0020..U+00FF) — the NF-e does not accept one.
+     * Typographic characters above U+00FF that the API converts before
+     * checking (quotes, dashes, ellipsis, bullet, euro, trademark), so the
+     * SDK must not refuse them.
+     */
+    private const NFE_CONVERTED_CHARS = [
+        0x2018, 0x2019, 0x201A, 0x201C, 0x201D, 0x201E,
+        0x2013, 0x2014, 0x2212, 0x2026, 0x2022, 0x20AC, 0x2122,
+    ];
+
+    /**
+     * Rejects the first free-text field holding a character the NF-e cannot
+     * carry: above U+00FF and not one of the characters the API converts.
+     * Anything up to U+00FF (tab, newline and CR included) is let through —
+     * the API folds whitespace runs itself.
      *
      * @param Product[] $items
      */
@@ -81,7 +93,7 @@ final class Invoice extends Client
             }
             foreach (mb_str_split($value, 1, 'UTF-8') as $char) {
                 $code = mb_ord($char, 'UTF-8');
-                if ($code < 0x20 || $code > 0xFF) {
+                if ($code > 0xFF && !in_array($code, self::NFE_CONVERTED_CHARS, true)) {
                     throw new InvoiceError(
                         "{$path} contains a character outside ISO-8859-1 (latin1), "
                         . "which NF-e does not accept: '{$char}'",

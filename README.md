@@ -264,7 +264,7 @@ Three things worth knowing before you loop:
 - `Stackin\Errors\ConnectionFailedError` — the API didn't respond (network/DNS/timeout).
 - `Stackin\Errors\InvoiceError` — a request that would obviously fail server-side, caught before the network call:
   - `issue()`'s items is empty, missing `ncm`/`cfop` on an item for NFE, or a missing/incomplete recipient `Address` on NFE.
-  - on NFE, any free-text field (`client_name`, item `description`/`unit`/`purchase_order`/`purchase_order_item`/`observations`, every recipient `Address` field) holding a character outside ISO-8859-1 printable (U+0020..U+00FF) — accents are fine, emoji, `—`, `€` or a tab are not. NFSE is not checked.
+  - on NFE, any free-text field (`client_name`, item `description`/`unit`/`purchase_order`/`purchase_order_item`/`observations`, every recipient `Address` field) holding a character the NF-e cannot carry: anything above ISO-8859-1 (U+00FF) — emoji, CJK, Cyrillic… — is refused. Accents, tabs and newlines are fine, and typographic quotes, dashes, ellipsis, bullet, `€` and `™` are converted by the API, so they are let through. NFSE is not checked.
 
 Building the full fiscal document (issuer data, service code, tax groups, schema-accurate XML) is the API's job — configured once per company, not passed on every call.
 
