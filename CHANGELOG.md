@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.13.0 — 2026-11-15
+
+### Features
+- **product:** validate the RECOPI check digits
+
+### Bug Fixes
+- **product:** anchor the RECOPI pattern at the absolute end
+
 ## v0.12.0 — 2026-11-15
 
 ### Features
