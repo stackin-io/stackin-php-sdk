@@ -229,6 +229,9 @@ final class Invoice extends Client
     /**
      * Files a correction letter (CC-e) against an issued document.
      *
+     * NF-e only: the access key must be the 44-digit NF-e key. An NFS-e
+     * has no correction letter — cancel and reissue it instead.
+     *
      * @return array<string, mixed>
      */
     public function correct(
@@ -236,6 +239,11 @@ final class Invoice extends Client
         DocumentType $documentType,
         string $correction,
     ): array {
+        if (preg_match('/^\d{44}$/', $accessKey) !== 1) {
+            throw new InvoiceError(
+                'correct is NFe only. NFSe has no correction letter — cancel and reissue instead.',
+            );
+        }
         $length = mb_strlen($correction);
         if ($length < 15 || $length > 1000) {
             throw new InvoiceError('correction must be 15 to 1000 characters');
