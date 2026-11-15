@@ -18,7 +18,8 @@ use Stackin\Errors\InvoiceError;
  * InvoiceError: `ncm` must be the full 8 digits, or 00 for a service
  * line (SEFAZ rejects any other 2-digit chapter with 777), and
  * `barcode` (cEAN) must be `SEM GTIN` or a GTIN of 8, 12, 13 or 14
- * digits whose GS1 check digit is right.
+ * digits whose GS1 check digit is right. `recopiNumber` must be the
+ * 20-digit RECOPI number with its two modulo-11 check digits right.
  */
 final class Product
 {
@@ -74,6 +75,35 @@ final class Product
         if ($barcode !== null && $barcode !== 'SEM GTIN' && !self::validGtinCheckDigit($barcode)) {
             throw new InvoiceError('barcode has an invalid GTIN check digit');
         }
+        if ($recopiNumber !== null && preg_match('/^\d{20}\z/', $recopiNumber) !== 1) {
+            throw new InvoiceError('recopiNumber must have exactly 20 digits');
+        }
+        if ($recopiNumber !== null && !self::validRecopiCheckDigits($recopiNumber)) {
+            throw new InvoiceError('recopiNumber has invalid check digits');
+        }
+    }
+
+    /**
+     * RECOPI (MOC 7.0 §8.5): two modulo-11 check digits. DV1 over the
+     * first 18 digits with weights 18..1 left to right, DV2 over the
+     * first 19 (with DV1) with weights 19..1; r = sum % 11, DV = 0 when
+     * r is 0 or 1, else 11 - r. The date/time part is not checked.
+     */
+    private static function validRecopiCheckDigits(string $recopi): bool
+    {
+        $digit = static function (string $body): int {
+            $sum = 0;
+            $length = strlen($body);
+            for ($i = 0; $i < $length; $i++) {
+                $sum += (int) $body[$i] * ($length - $i);
+            }
+            $r = $sum % 11;
+
+            return $r < 2 ? 0 : 11 - $r;
+        };
+
+        return $digit(substr($recopi, 0, 18)) === (int) $recopi[18]
+            && $digit(substr($recopi, 0, 19)) === (int) $recopi[19];
     }
 
     /**
