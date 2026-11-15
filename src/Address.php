@@ -4,8 +4,14 @@ declare(strict_types=1);
 
 namespace Stackin;
 
+use Stackin\Errors\InvoiceError;
+
 /**
  * A plain postal address.
+ *
+ * `street` and `neighborhood`, when given, must have at least 2
+ * characters after trimming — the NF-e schema (xLgr/xBairro) refuses a
+ * shorter one. Raises InvoiceError when built otherwise.
  */
 final class Address
 {
@@ -18,6 +24,11 @@ final class Address
         public readonly ?string $city = null,
         public readonly ?string $zipCode = null,
     ) {
+        foreach (['street' => $street, 'neighborhood' => $neighborhood] as $field => $value) {
+            if ($value !== null && $value !== '' && mb_strlen(trim($value)) < 2) {
+                throw new InvoiceError("{$field} must have at least 2 characters");
+            }
+        }
     }
 
     /**

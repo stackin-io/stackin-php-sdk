@@ -105,6 +105,50 @@ final class InvoiceTest extends TestCase
         return $invoice;
     }
 
+    public function testIssueRejectsAnNfeDescriptionOver120Characters(): void
+    {
+        $this->expectException(InvoiceError::class);
+        $this->expectExceptionMessage(
+            'items[1].description exceeds 120 characters (NF-e xProd limit)',
+        );
+
+        $this->okInvoice()->issue(
+            DocumentType::NFE,
+            'Acme',
+            '123',
+            [
+                new Product(description: 'Widget', amount: 10.0, ncm: '12345678', cfop: '5102'),
+                new Product(
+                    description: str_repeat('é', 121),
+                    amount: 10.0,
+                    ncm: '12345678',
+                    cfop: '5102',
+                ),
+            ],
+            $this->validNfeAddress(),
+        );
+    }
+
+    public function testIssueAcceptsAnNfeDescriptionOf120Characters(): void
+    {
+        $result = $this->okInvoice()->issue(
+            DocumentType::NFE,
+            'Acme',
+            '123',
+            [
+                new Product(
+                    description: str_repeat('é', 120),
+                    amount: 10.0,
+                    ncm: '12345678',
+                    cfop: '5102',
+                ),
+            ],
+            $this->validNfeAddress(),
+        );
+
+        $this->assertSame('abc123', $result['access_key']);
+    }
+
     public function testIssueAcceptsLatin1AccentsOnNfe(): void
     {
         $result = $this->okInvoice()->issue(
@@ -254,6 +298,18 @@ final class InvoiceTest extends TestCase
             'Acme ✓',
             '123',
             [new Product(description: 'Consultoria — 😀', amount: 10.0)],
+        );
+
+        $this->assertSame('abc123', $result['access_key']);
+    }
+
+    public function testIssueDoesNotLimitAnNfseDescription(): void
+    {
+        $result = $this->okInvoice()->issue(
+            DocumentType::NFSE,
+            'Acme',
+            '123',
+            [new Product(description: str_repeat('a', 500), amount: 10.0)],
         );
 
         $this->assertSame('abc123', $result['access_key']);
