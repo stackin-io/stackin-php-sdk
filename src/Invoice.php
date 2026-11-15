@@ -241,6 +241,13 @@ final class Invoice extends Client
     /**
      * Files a correction letter (CC-e) against an issued document.
      *
+     * NF-e only: a key that is not an NF-e access key (44 characters;
+     * the issuer CNPJ in it may be alphanumeric) is refused locally with
+     * InvoiceError — an NFS-e has no correction letter, so cancel and
+     * reissue it instead. An NF-e key sent with
+     * DocumentType::NFSE, or one the API does not hold, still comes back
+     * from the API as an ApiError with status 409.
+     *
      * @return array<string, mixed>
      */
     public function correct(
@@ -248,6 +255,11 @@ final class Invoice extends Client
         DocumentType $documentType,
         string $correction,
     ): array {
+        if (preg_match('/^[0-9]{6}[0-9A-Z]{12}[0-9]{26}$/D', $accessKey) !== 1) {
+            throw new InvoiceError(
+                'correct is NFe only. NFSe has no correction letter — cancel and reissue instead.',
+            );
+        }
         $length = mb_strlen($correction);
         if ($length < 15 || $length > 1000) {
             throw new InvoiceError('correction must be 15 to 1000 characters');

@@ -165,8 +165,15 @@ The original document does not change — the CC-e is an event attached to it, a
 the authorized XML stays as it was. A document accepts at most 20 of them, and
 they are numbered for you.
 
-**NF-e only.** NFS-e has no correction letter, and asking for one returns
-a `409`.
+**NF-e only.** NFS-e has no correction letter. The access key already says
+which one it is — an NF-e access key is 44 characters, an NFS-e key 50 digits —
+so a key that is not an NF-e access key is refused locally, before the call,
+with an `InvoiceError`:
+`correct is NFe only. NFSe has no correction letter — cancel and reissue instead.`
+From July 2026 the issuer CNPJ inside the key may be alphanumeric, so its first
+12 characters accept `0-9` and `A-Z` (uppercase); the rest of the key is digits.
+What only the API can know is still an `ApiError` with status `409`: an NF-e
+key sent with `DocumentType::NFSE`, or a key for a document the API does not hold.
 
 ## Invalidating unused numbers
 
@@ -269,6 +276,7 @@ Three things worth knowing before you loop:
   - an NFE item `description` over 120 characters (the xProd limit; NFSE descriptions are not limited).
   - an `Address` built with a `street` or `neighborhood` under 2 characters after trimming.
   - on NFE, any free-text field (`client_name`, item `description`/`unit`/`purchase_order`/`purchase_order_item`/`observations`, every recipient `Address` field) holding a character the NF-e cannot carry: anything above ISO-8859-1 (U+00FF) — emoji, CJK, Cyrillic… — is refused. Accents, tabs and newlines are fine, and typographic quotes, dashes, ellipsis, bullet, `€` and `™` are converted by the API, so they are let through. NFSE is not checked.
+  - `correct()` with an access key that is not an NF-e access key (44 characters) — an NFSe has no correction letter; cancel and reissue instead.
 
 Building the full fiscal document (issuer data, service code, tax groups, schema-accurate XML) is the API's job — configured once per company, not passed on every call.
 

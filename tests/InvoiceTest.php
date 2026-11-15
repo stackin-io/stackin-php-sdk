@@ -23,6 +23,8 @@ use Stackin\Manifestation;
 
 final class InvoiceTest extends TestCase
 {
+    private const NFE_KEY = '35240112345678000190550010000001231234567890';
+
     private function injectMockHttpClient(Invoice $invoice, MockHandler $mock): void
     {
         $handlerStack = HandlerStack::create($mock);
@@ -559,14 +561,17 @@ final class InvoiceTest extends TestCase
         $this->injectMockHttpClient($invoice, $mock);
 
         $result = $invoice->correct(
-            'abc123',
+            self::NFE_KEY,
             DocumentType::NFE,
             'Transportadora corrigida para Rapido Ltda',
         );
 
         $request = $mock->getLastRequest();
         $this->assertSame('POST', $request->getMethod());
-        $this->assertSame('/api/v1/invoices/abc123/correction', $request->getUri()->getPath());
+        $this->assertSame(
+            '/api/v1/invoices/' . self::NFE_KEY . '/correction',
+            $request->getUri()->getPath(),
+        );
         $this->assertSame([
             'document_type' => 'nfe',
             'correction' => 'Transportadora corrigida para Rapido Ltda',
@@ -579,7 +584,7 @@ final class InvoiceTest extends TestCase
         $invoice = new Invoice(apiKey: 'key', baseUrl: 'https://example.com');
 
         $this->expectException(InvoiceError::class);
-        $invoice->correct('abc123', DocumentType::NFE, 'curto demais');
+        $invoice->correct(self::NFE_KEY, DocumentType::NFE, 'curto demais');
     }
 
     public function testCorrectRejectsTextOver1000Characters(): void
@@ -587,7 +592,85 @@ final class InvoiceTest extends TestCase
         $invoice = new Invoice(apiKey: 'key', baseUrl: 'https://example.com');
 
         $this->expectException(InvoiceError::class);
-        $invoice->correct('abc123', DocumentType::NFE, str_repeat('a', 1001));
+        $invoice->correct(self::NFE_KEY, DocumentType::NFE, str_repeat('a', 1001));
+    }
+
+    /**
+     * An NF-e key: 6 digits (cUF + AAMM), the 12 base characters of the
+     * issuer CNPJ — alphanumeric from July 2026 — then 26 digits.
+     */
+    private static function nfeKey(string $cnpjBase): string
+    {
+        return '352607' . $cnpjBase . str_repeat('0', 25) . '1';
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function nfeKeys(): array
+    {
+        return [
+            '44 digits' => [self::nfeKey('123456780001')],
+            'alphanumeric cnpj' => [self::nfeKey('12ABC3450001')],
+            'all-letter cnpj base' => [self::nfeKey('ABCDEFGHIJKL')],
+        ];
+    }
+
+    #[DataProvider('nfeKeys')]
+    public function testCorrectAcceptsAnNfeKey(string $accessKey): void
+    {
+        $this->assertSame(44, strlen($accessKey));
+        $mock = new MockHandler([
+            new Response(200, ['Content-Type' => 'application/json'], (string) json_encode([
+                'result' => ['status' => 'authorized'],
+            ])),
+        ]);
+        $invoice = new Invoice(apiKey: 'key', baseUrl: 'https://example.com');
+        $this->injectMockHttpClient($invoice, $mock);
+
+        $invoice->correct($accessKey, DocumentType::NFE, 'Transportadora corrigida');
+
+        $this->assertSame(
+            "/api/v1/invoices/{$accessKey}/correction",
+            $mock->getLastRequest()?->getUri()->getPath(),
+        );
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function nonNfeKeys(): array
+    {
+        return [
+            'nfse key (50 digits)' => [str_repeat('1', 50)],
+            '43 digits' => [str_repeat('1', 43)],
+            '45 digits' => [str_repeat('1', 45)],
+            'lowercase cnpj' => [self::nfeKey('12abc3450001')],
+            'letter before the cnpj' => ['35260A' . '123456780001' . str_repeat('0', 26)],
+            'letter after the cnpj base' => ['352607' . '123456780001' . 'A' . str_repeat('0', 25)],
+            'letters' => ['abc123'],
+            'trailing newline' => [self::nfeKey('123456780001') . "\n"],
+            'empty' => [''],
+        ];
+    }
+
+    #[DataProvider('nonNfeKeys')]
+    public function testCorrectRefusesAKeyThatIsNotAnNfeKey(string $accessKey): void
+    {
+        $mock = new MockHandler([]);
+        $invoice = new Invoice(apiKey: 'key', baseUrl: 'https://example.com');
+        $this->injectMockHttpClient($invoice, $mock);
+
+        try {
+            $invoice->correct($accessKey, DocumentType::NFE, 'Transportadora corrigida');
+            $this->fail('expected InvoiceError');
+        } catch (InvoiceError $error) {
+            $this->assertSame(
+                'correct is NFe only. NFSe has no correction letter — cancel and reissue instead.',
+                $error->getMessage(),
+            );
+        }
+        $this->assertNull($mock->getLastRequest());
     }
 
     public function testAnUnknownResponseFieldReachesTheCaller(): void
