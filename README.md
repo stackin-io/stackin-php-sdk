@@ -262,7 +262,11 @@ Three things worth knowing before you loop:
 
 - `Stackin\Errors\ApiError` — the API responded with a non-2xx status (`statusCode`/`detail` properties) — a 401 here means `api_key` is missing, wrong, or was rotated.
 - `Stackin\Errors\ConnectionFailedError` — the API didn't respond (network/DNS/timeout).
-- `Stackin\Errors\InvoiceError` — `issue()`'s items is empty, missing `ncm`/`cfop` on an item for NFE, or a missing/incomplete recipient `Address` on NFE.
+- `Stackin\Errors\InvoiceError` — a request that would obviously fail server-side, caught before the network call:
+  - `issue()`'s items is empty, missing `ncm`/`cfop` on an item for NFE, or a missing/incomplete recipient `Address` on NFE.
+  - a `Product` built with a `barcode` (cEAN) that is neither `SEM GTIN` nor 8, 12, 13 or 14 digits.
+  - an NFE item `description` over 120 characters (the xProd limit; NFSE descriptions are not limited).
+  - an `Address` built with a `street` or `neighborhood` under 2 characters after trimming.
 
 Building the full fiscal document (issuer data, service code, tax groups, schema-accurate XML) is the API's job — configured once per company, not passed on every call.
 

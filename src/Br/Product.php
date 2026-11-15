@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Stackin\Br;
 
+use Stackin\Errors\InvoiceError;
+
 /**
  * One product or service line item on an invoice.
  *
@@ -11,6 +13,10 @@ namespace Stackin\Br;
  * document type. The rest are
  * Brazil-specific and required per item only when document_type is
  * NFE — ignored for NFSE.
+ *
+ * Field formats are checked when the item is built and raise
+ * InvoiceError: `barcode` (cEAN) must be `SEM GTIN` or a GTIN of 8,
+ * 12, 13 or 14 digits.
  */
 final class Product
 {
@@ -52,6 +58,11 @@ final class Product
         /** @var array<string, mixed>|null */
         public readonly ?array $ibsCbs = null,
     ) {
+        if ($barcode !== null && preg_match('/^(SEM GTIN|\d{8}|\d{12,14})$/', $barcode) !== 1) {
+            throw new InvoiceError(
+                "barcode must be 'SEM GTIN' or a GTIN of 8, 12, 13 or 14 digits",
+            );
+        }
     }
 
     private static function decimalString(?float $value): ?string

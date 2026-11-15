@@ -91,6 +91,75 @@ final class InvoiceTest extends TestCase
         );
     }
 
+    private function okInvoice(): Invoice
+    {
+        $mock = new MockHandler([
+            new Response(200, ['Content-Type' => 'application/json'], (string) json_encode([
+                'result' => ['access_key' => 'abc123'],
+            ])),
+        ]);
+        $invoice = new Invoice(apiKey: 'key', baseUrl: 'https://example.com');
+        $this->injectMockHttpClient($invoice, $mock);
+
+        return $invoice;
+    }
+
+    public function testIssueRejectsAnNfeDescriptionOver120Characters(): void
+    {
+        $this->expectException(InvoiceError::class);
+        $this->expectExceptionMessage(
+            'items[1].description exceeds 120 characters (NF-e xProd limit)',
+        );
+
+        $this->okInvoice()->issue(
+            DocumentType::NFE,
+            'Acme',
+            '123',
+            [
+                new Product(description: 'Widget', amount: 10.0, ncm: '12345678', cfop: '5102'),
+                new Product(
+                    description: str_repeat('é', 121),
+                    amount: 10.0,
+                    ncm: '12345678',
+                    cfop: '5102',
+                ),
+            ],
+            $this->validNfeAddress(),
+        );
+    }
+
+    public function testIssueAcceptsAnNfeDescriptionOf120Characters(): void
+    {
+        $result = $this->okInvoice()->issue(
+            DocumentType::NFE,
+            'Acme',
+            '123',
+            [
+                new Product(
+                    description: str_repeat('é', 120),
+                    amount: 10.0,
+                    ncm: '12345678',
+                    cfop: '5102',
+                ),
+            ],
+            $this->validNfeAddress(),
+        );
+
+        $this->assertSame('abc123', $result['access_key']);
+    }
+
+    public function testIssueDoesNotLimitAnNfseDescription(): void
+    {
+        $result = $this->okInvoice()->issue(
+            DocumentType::NFSE,
+            'Acme',
+            '123',
+            [new Product(description: str_repeat('a', 500), amount: 10.0)],
+        );
+
+        $this->assertSame('abc123', $result['access_key']);
+    }
+
     public function testIssuePostsToInvoicesEndpointWithAuthHeader(): void
     {
         $mock = new MockHandler([
