@@ -36,7 +36,7 @@ $product = new Product(
     ],
     exTipi: '01',
     importContentControlNumber: '550E8400-E29B-41D4-A716-446655440000',
-    recopiNumber: '00000000000012345678',
+    recopiNumber: '20131106114609734393',
     extraGroups: [],
 );
 

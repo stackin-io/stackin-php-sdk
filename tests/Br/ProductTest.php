@@ -161,7 +161,7 @@ final class ProductTest extends TestCase
             taxBenefitCode: 'PR820001',
             exTipi: '01',
             importContentControlNumber: '550E8400-E29B-41D4-A716-446655440000',
-            recopiNumber: '00000000000012345678',
+            recopiNumber: '20131106114609734393',
         );
         $data = $product->toArray()['product']['br'];
 
@@ -174,7 +174,7 @@ final class ProductTest extends TestCase
             '550E8400-E29B-41D4-A716-446655440000',
             $data['import_content_control_number'],
         );
-        $this->assertSame('00000000000012345678', $data['recopi_number']);
+        $this->assertSame('20131106114609734393', $data['recopi_number']);
     }
 
     public function testUnitPriceIsSentWhenGiven(): void
@@ -410,5 +410,65 @@ final class ProductTest extends TestCase
         $product = new Product(description: 'Teclado', amount: 10.0, barcode: '7891234567895');
 
         $this->assertSame('7891234567895', $product->toArray()['product']['barcode']);
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function validRecopiNumbers(): array
+    {
+        return [
+            'moc 8.5.3 example' => ['20131106114609734393'],
+            'remainders 0 and 1 give 0' => ['00000000000012345600'],
+        ];
+    }
+
+    #[DataProvider('validRecopiNumbers')]
+    public function testAcceptsAValidRecopiNumber(string $recopi): void
+    {
+        $product = new Product(description: 'Papel', amount: 10.0, recopiNumber: $recopi);
+
+        $this->assertSame($recopi, $product->toArray()['product']['br']['recopi_number']);
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function wrongRecopiCheckDigits(): array
+    {
+        return [
+            'bad dv2' => ['20131106114609734394'],
+            'bad dv1' => ['20131106114609734383'],
+        ];
+    }
+
+    #[DataProvider('wrongRecopiCheckDigits')]
+    public function testRejectsWrongRecopiCheckDigits(string $recopi): void
+    {
+        $this->expectException(InvoiceError::class);
+        $this->expectExceptionMessage('recopiNumber has invalid check digits');
+
+        new Product(description: 'Papel', amount: 10.0, recopiNumber: $recopi);
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function malformedRecopiNumbers(): array
+    {
+        return [
+            '19 digits' => ['2013110611460973439'],
+            '21 digits' => ['201311061146097343930'],
+            'letters' => ['2013110611460973439A'],
+        ];
+    }
+
+    #[DataProvider('malformedRecopiNumbers')]
+    public function testRejectsARecopiNumberThatIsNot20Digits(string $recopi): void
+    {
+        $this->expectException(InvoiceError::class);
+        $this->expectExceptionMessage('recopiNumber must have exactly 20 digits');
+
+        new Product(description: 'Papel', amount: 10.0, recopiNumber: $recopi);
     }
 }
