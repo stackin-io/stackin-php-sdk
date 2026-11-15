@@ -271,6 +271,50 @@ final class InvoiceTest extends TestCase
         $this->assertSame('abc123', $result['access_key']);
     }
 
+    public function testIssueRequiresAnAddressOnAnNfseWithRetainedIss(): void
+    {
+        $this->expectException(InvoiceError::class);
+        $this->expectExceptionMessage(
+            'recipient_address is required on an NFS-e when any item has tax_retained=true '
+            . '(ISSQN retained by the tomador)',
+        );
+
+        $this->okInvoice()->issue(
+            DocumentType::NFSE,
+            'Acme',
+            '123',
+            [
+                new Product(description: 'Consultoria', amount: 10.0),
+                new Product(description: 'Design', amount: 10.0, taxRetained: true),
+            ],
+        );
+    }
+
+    public function testIssueAcceptsAnNfseWithRetainedIssAndAnAddress(): void
+    {
+        $result = $this->okInvoice()->issue(
+            DocumentType::NFSE,
+            'Acme',
+            '123',
+            [new Product(description: 'Design', amount: 10.0, taxRetained: true)],
+            $this->validNfeAddress(),
+        );
+
+        $this->assertSame('abc123', $result['access_key']);
+    }
+
+    public function testIssueAcceptsAnNfseWithoutRetainedIssOrAddress(): void
+    {
+        $result = $this->okInvoice()->issue(
+            DocumentType::NFSE,
+            'Acme',
+            '123',
+            [new Product(description: 'Design', amount: 10.0)],
+        );
+
+        $this->assertSame('abc123', $result['access_key']);
+    }
+
     public function testIssueDoesNotLimitAnNfseDescription(): void
     {
         $result = $this->okInvoice()->issue(
