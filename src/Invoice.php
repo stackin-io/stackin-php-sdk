@@ -87,6 +87,17 @@ final class Invoice extends Client
             self::validateNfeAddress($recipientAddress);
         }
 
+        if ($documentType === DocumentType::NFSE && $recipientAddress === null) {
+            foreach ($items as $item) {
+                if ($item->taxRetained) {
+                    throw new InvoiceError(
+                        'recipient_address is required on an NFS-e when any item has '
+                        . 'tax_retained=true (ISSQN retained by the tomador)',
+                    );
+                }
+            }
+        }
+
         $payload = [
             'document_type' => $documentType->value,
             'client_name' => $clientName,
