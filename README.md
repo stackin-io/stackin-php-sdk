@@ -99,7 +99,9 @@ file_put_contents(
 );
 ```
 
-The recipient `Address` passed to `issue()` is the buyer's address — **required for NFE** and ignored for NFSE. Every field is required, `cityCode` (the 7-digit IBGE municipality code) included: it becomes `enderDest` on the wire and the SEFAZ rejects a partial one. `state` is also what resolves `idDest` — a buyer in another state is emitted as an interstate operation automatically. A missing or incomplete address throws an `InvoiceError` locally, before the request goes out.
+The recipient `Address` passed to `issue()` is the buyer's address — **required for NFE**. On NFE every field is required, `cityCode` (the 7-digit IBGE municipality code) included: it becomes `enderDest` on the wire and the SEFAZ rejects a partial one. `state` is also what resolves `idDest` — a buyer in another state is emitted as an interstate operation automatically. A missing or incomplete address throws an `InvoiceError` locally, before the request goes out.
+
+On NFSE it is the tomador's address: optional, except when any item has `taxRetained: true` (ISSQN retained by the tomador), where the city authorizer refuses the document without it. Then it is required and complete — every field except `cityCode` — and a missing or incomplete one also throws an `InvoiceError` locally.
 
 ## Retrying safely
 
@@ -264,7 +266,7 @@ Three things worth knowing before you loop:
 - `Stackin\Errors\ConnectionFailedError` — the API didn't respond (network/DNS/timeout).
 - `Stackin\Errors\InvoiceError` — a request that would obviously fail server-side, caught before the network call:
   - `issue()`'s items is empty, missing `ncm`/`cfop` on an item for NFE, or a missing/incomplete recipient `Address` on NFE.
-  - an NFSE where any item has `taxRetained: true` (ISSQN retained by the tomador) but no recipient `Address` was given.
+  - an NFSE where any item has `taxRetained: true` (ISSQN retained by the tomador) but the recipient `Address` is missing or lacks any field other than `cityCode`.
 
 Building the full fiscal document (issuer data, service code, tax groups, schema-accurate XML) is the API's job — configured once per company, not passed on every call.
 

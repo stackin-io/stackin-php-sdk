@@ -123,14 +123,56 @@ final class InvoiceTest extends TestCase
         );
     }
 
-    public function testIssueAcceptsAnNfseWithRetainedIssAndAnAddress(): void
+    public function testIssueAcceptsAnNfseWithRetainedIssAndACompleteAddress(): void
     {
         $result = $this->okInvoice()->issue(
             DocumentType::NFSE,
             'Acme',
             '123',
             [new Product(description: 'Design', amount: 10.0, taxRetained: true)],
-            $this->validNfeAddress(),
+            new Address(
+                state: 'SC',
+                street: 'Rua das Flores',
+                number: '1200',
+                neighborhood: 'Centro',
+                city: 'Joinville',
+                zipCode: '89201100',
+            ),
+        );
+
+        $this->assertSame('abc123', $result['access_key']);
+    }
+
+    public function testIssueRejectsAPartialAddressOnAnNfseWithRetainedIss(): void
+    {
+        $this->expectException(InvoiceError::class);
+        $this->expectExceptionMessage(
+            'recipientAddress is missing required fields for NFSE when any item has '
+            . 'tax_retained=true: number, city',
+        );
+
+        $this->okInvoice()->issue(
+            DocumentType::NFSE,
+            'Acme',
+            '123',
+            [new Product(description: 'Design', amount: 10.0, taxRetained: true)],
+            new Address(
+                state: 'SC',
+                street: 'Rua das Flores',
+                neighborhood: 'Centro',
+                zipCode: '89201100',
+            ),
+        );
+    }
+
+    public function testIssueAcceptsAPartialAddressOnAnNfseWithoutRetainedIss(): void
+    {
+        $result = $this->okInvoice()->issue(
+            DocumentType::NFSE,
+            'Acme',
+            '123',
+            [new Product(description: 'Design', amount: 10.0)],
+            new Address(state: 'SC'),
         );
 
         $this->assertSame('abc123', $result['access_key']);
