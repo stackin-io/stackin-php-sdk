@@ -83,6 +83,11 @@ final class Invoice extends Client
                 if (!$item->cfop) {
                     throw new InvoiceError("items[{$index}].cfop is required for NFE");
                 }
+                if (mb_strlen($item->description) > 120) {
+                    throw new InvoiceError(
+                        "items[{$index}].description exceeds 120 characters (NF-e xProd limit)",
+                    );
+                }
             }
             self::validateNfeAddress($recipientAddress);
         }

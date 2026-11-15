@@ -265,6 +265,9 @@ Three things worth knowing before you loop:
 - `Stackin\Errors\InvoiceError` — a request that would obviously fail server-side, caught before the network call:
   - `issue()`'s items is empty, missing `ncm`/`cfop` on an item for NFE, or a missing/incomplete recipient `Address` on NFE.
   - a `Product` built with an `ncm` that is not the full 8 digits, or `00` for a service line — SEFAZ rejects any other 2-digit chapter with `777`.
+  - a `Product` built with a `barcode` (cEAN) that is neither `SEM GTIN` nor 8, 12, 13 or 14 digits.
+  - an NFE item `description` over 120 characters (the xProd limit; NFSE descriptions are not limited).
+  - an `Address` built with a `street` or `neighborhood` under 2 characters after trimming.
 
 Building the full fiscal document (issuer data, service code, tax groups, schema-accurate XML) is the API's job — configured once per company, not passed on every call.
 

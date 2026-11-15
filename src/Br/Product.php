@@ -16,7 +16,9 @@ use Stackin\Errors\InvoiceError;
  *
  * Field formats are checked when the item is built and raise
  * InvoiceError: `ncm` must be the full 8 digits, or 00 for a service
- * line (SEFAZ rejects any other 2-digit chapter with 777).
+ * line (SEFAZ rejects any other 2-digit chapter with 777), and
+ * `barcode` (cEAN) must be `SEM GTIN` or a GTIN of 8, 12, 13 or 14
+ * digits.
  */
 final class Product
 {
@@ -62,6 +64,11 @@ final class Product
             throw new InvoiceError(
                 'ncm must be the full 8 digits, or 00 for a service line; '
                 . 'SEFAZ rejects any other code (777)',
+            );
+        }
+        if ($barcode !== null && preg_match('/^(SEM GTIN|\d{8}|\d{12,14})$/', $barcode) !== 1) {
+            throw new InvoiceError(
+                "barcode must be 'SEM GTIN' or a GTIN of 8, 12, 13 or 14 digits",
             );
         }
     }
