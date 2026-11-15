@@ -30,6 +30,41 @@ final class Invoice extends Client
             throw new InvoiceError('recipientAddress is required for NFE');
         }
 
+        self::requireAddressFields($address, 'NFE', withCityCode: true);
+    }
+
+    /**
+     * On an NFS-e with any retained item (ISSQN retained by the tomador) the
+     * city authorizer refuses the document without the tomador's address
+     * (E0237), so it is required there — every field but cityCode.
+     *
+     * @param Product[] $items
+     */
+    private static function validateNfseRetainedAddress(array $items, ?Address $address): void
+    {
+        $retained = array_filter($items, static fn (Product $item): bool => $item->taxRetained);
+        if ($retained === []) {
+            return;
+        }
+        if ($address === null) {
+            throw new InvoiceError(
+                'recipient_address is required on an NFS-e when any item has '
+                . 'tax_retained=true (ISSQN retained by the tomador)',
+            );
+        }
+
+        self::requireAddressFields(
+            $address,
+            'NFSE when any item has tax_retained=true',
+            withCityCode: false,
+        );
+    }
+
+    private static function requireAddressFields(
+        Address $address,
+        string $context,
+        bool $withCityCode,
+    ): void {
         $fields = [
             'street' => $address->street,
             'number' => $address->number,
@@ -37,8 +72,10 @@ final class Invoice extends Client
             'city' => $address->city,
             'state' => $address->state,
             'zipCode' => $address->zipCode,
-            'cityCode' => $address->cityCode,
         ];
+        if ($withCityCode) {
+            $fields['cityCode'] = $address->cityCode;
+        }
 
         $missing = array_keys(array_filter(
             $fields,
@@ -47,7 +84,8 @@ final class Invoice extends Client
 
         if ($missing !== []) {
             throw new InvoiceError(
-                'recipientAddress is missing required fields for NFE: ' . implode(', ', $missing),
+                "recipientAddress is missing required fields for {$context}: "
+                . implode(', ', $missing),
             );
         }
     }
@@ -142,6 +180,10 @@ final class Invoice extends Client
             }
             self::validateNfeAddress($recipientAddress);
             self::validateNfeLatin1($clientName, $items, $recipientAddress);
+        }
+
+        if ($documentType === DocumentType::NFSE) {
+            self::validateNfseRetainedAddress($items, $recipientAddress);
         }
 
         $payload = [

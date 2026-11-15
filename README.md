@@ -99,7 +99,9 @@ file_put_contents(
 );
 ```
 
-The recipient `Address` passed to `issue()` is the buyer's address — **required for NFE** and ignored for NFSE. Every field is required, `cityCode` (the 7-digit IBGE municipality code) included: it becomes `enderDest` on the wire and the SEFAZ rejects a partial one. `state` is also what resolves `idDest` — a buyer in another state is emitted as an interstate operation automatically. A missing or incomplete address throws an `InvoiceError` locally, before the request goes out.
+The recipient `Address` passed to `issue()` is the buyer's address — **required for NFE**. On NFE every field is required, `cityCode` (the 7-digit IBGE municipality code) included: it becomes `enderDest` on the wire and the SEFAZ rejects a partial one. `state` is also what resolves `idDest` — a buyer in another state is emitted as an interstate operation automatically. A missing or incomplete address throws an `InvoiceError` locally, before the request goes out.
+
+On NFSE it is the tomador's address: optional, except when any item has `taxRetained: true` (ISSQN retained by the tomador), where the city authorizer refuses the document without it. Then it is required and complete — every field except `cityCode` — and a missing or incomplete one also throws an `InvoiceError` locally.
 
 ## Retrying safely
 
@@ -276,6 +278,7 @@ Three things worth knowing before you loop:
   - an NFE item `description` over 120 characters (the xProd limit; NFSE descriptions are not limited).
   - an `Address` built with a `street` or `neighborhood` under 2 characters after trimming.
   - on NFE, any free-text field (`client_name`, item `description`/`unit`/`purchase_order`/`purchase_order_item`/`observations`, every recipient `Address` field) holding a character the NF-e cannot carry: anything above ISO-8859-1 (U+00FF) — emoji, CJK, Cyrillic… — is refused. Accents, tabs and newlines are fine, and typographic quotes, dashes, ellipsis, bullet, `€` and `™` are converted by the API, so they are let through. NFSE is not checked.
+  - an NFSE where any item has `taxRetained: true` (ISSQN retained by the tomador) but the recipient `Address` is missing or lacks any field other than `cityCode`.
   - `correct()` with an access key that is not an NF-e access key (44 characters) — an NFSe has no correction letter; cancel and reissue instead.
 
 Building the full fiscal document (issuer data, service code, tax groups, schema-accurate XML) is the API's job — configured once per company, not passed on every call.
