@@ -171,7 +171,7 @@ final class Product
         );
 
         if ($this->extraGroups !== null) {
-            $br = [...$br, ...$this->extraGroups];
+            $br = self::withExtraGroups($br, $this->extraGroups);
         }
 
         if ($br !== []) {
@@ -193,5 +193,39 @@ final class Product
         $result['tax_retained'] = $this->taxRetained;
 
         return $result;
+    }
+
+    /**
+     * Keys the API reads directly on `br`; any other key is a layout
+     * group (veicProd, med, arma, comb, DI, rastro...) and goes under
+     * `br.extra_groups`, the only place the API accepts it.
+     */
+    private const BR_FIELDS = [
+        'ncm', 'cfop', 'cest', 'nve_codes', 'ind_escala', 'manufacturer_cnpj',
+        'tax_benefit_code', 'presumed_credits', 'ex_tipi',
+        'import_content_control_number', 'recopi_number', 'ibs_cbs', 'tax',
+        'fuel', 'extra_groups',
+    ];
+
+    /**
+     * @param array<string, mixed> $br
+     * @param array<string, mixed> $extraGroups
+     * @return array<string, mixed>
+     */
+    private static function withExtraGroups(array $br, array $extraGroups): array
+    {
+        $groups = [];
+        foreach ($extraGroups as $key => $value) {
+            if (in_array($key, self::BR_FIELDS, true)) {
+                $br[$key] = $value;
+            } else {
+                $groups[$key] = $value;
+            }
+        }
+        if ($groups !== []) {
+            $br['extra_groups'] = [...($br['extra_groups'] ?? []), ...$groups];
+        }
+
+        return $br;
     }
 }
