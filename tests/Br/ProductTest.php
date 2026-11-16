@@ -6,6 +6,7 @@ namespace Stackin\Tests\Br;
 
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
+use Stackin\Br\Fuel;
 use Stackin\Br\Product;
 use Stackin\Errors\InvoiceError;
 
@@ -471,5 +472,125 @@ final class ProductTest extends TestCase
         $this->expectExceptionMessage('recopiNumber must have exactly 20 digits');
 
         new Product(description: 'Papel', amount: 10.0, recopiNumber: $recopi);
+    }
+
+    private function gasoline(): Fuel
+    {
+        return new Fuel(
+            anpCode: '320102001',
+            anpDescription: 'GASOLINA C COMUM',
+            consumerState: 'SC',
+        );
+    }
+
+    public function testFuelGoesUnderBrInSnakeCase(): void
+    {
+        $product = new Product(
+            description: 'GLP',
+            amount: 120.0,
+            ncm: '27111910',
+            cfop: '5656',
+            fuel: new Fuel(
+                anpCode: '210203001',
+                anpDescription: 'GLP',
+                consumerState: 'SC',
+                glpPercent: 60.0,
+                naturalGasNationalPercent: 30.0,
+                naturalGasImportedPercent: 10.0,
+                startingValue: 95.5,
+                codif: '123456',
+                temperatureQuantity: 13.0,
+                biodieselPercent: 0.0,
+            ),
+        );
+
+        $this->assertSame(
+            [
+                'anp_code' => '210203001',
+                'anp_description' => 'GLP',
+                'consumer_state' => 'SC',
+                'glp_percent' => 60.0,
+                'natural_gas_national_percent' => 30.0,
+                'natural_gas_imported_percent' => 10.0,
+                'starting_value' => 95.5,
+                'codif' => '123456',
+                'temperature_quantity' => 13.0,
+                'biodiesel_percent' => 0.0,
+            ],
+            $product->toArray()['product']['br']['fuel'],
+        );
+    }
+
+    public function testFuelSendsOnlyTheRequiredFieldsWhenTheRestAreUnset(): void
+    {
+        $this->assertSame(
+            [
+                'anp_code' => '320102001',
+                'anp_description' => 'GASOLINA C COMUM',
+                'consumer_state' => 'SC',
+            ],
+            $this->gasoline()->toArray(),
+        );
+    }
+
+    public function testOmitsFuelWhenUnset(): void
+    {
+        $product = new Product(
+            description: 'Produto',
+            amount: 50.0,
+            ncm: '84713012',
+            cfop: '5102',
+        );
+
+        $this->assertArrayNotHasKey('fuel', $product->toArray()['product']['br']);
+    }
+
+    /**
+     * @return array<string, array{array<string, mixed>}>
+     */
+    public static function fuelGroupInExtraGroups(): array
+    {
+        return [
+            'comb merged into br' => [['comb' => ['cProdANP' => '320102001']]],
+            'comb under extra_groups' => [
+                ['extra_groups' => ['comb' => ['cProdANP' => '320102001']]],
+            ],
+            'fuel merged into br' => [['fuel' => ['anp_code' => '320102001']]],
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $extraGroups
+     */
+    #[DataProvider('fuelGroupInExtraGroups')]
+    public function testRefusesFuelTogetherWithACombGroup(array $extraGroups): void
+    {
+        $this->expectException(InvoiceError::class);
+        $this->expectExceptionMessage('send the fuel group once');
+
+        new Product(
+            description: 'Gasolina',
+            amount: 10.0,
+            ncm: '27101259',
+            cfop: '5656',
+            extraGroups: $extraGroups,
+            fuel: $this->gasoline(),
+        );
+    }
+
+    public function testKeepsOtherExtraGroupsBesideFuel(): void
+    {
+        $product = new Product(
+            description: 'Gasolina',
+            amount: 10.0,
+            ncm: '27101259',
+            cfop: '5656',
+            extraGroups: ['custom_field' => 'value'],
+            fuel: $this->gasoline(),
+        );
+
+        $br = $product->toArray()['product']['br'];
+        $this->assertSame('value', $br['custom_field']);
+        $this->assertSame('320102001', $br['fuel']['anp_code']);
     }
 }
