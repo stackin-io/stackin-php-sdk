@@ -80,4 +80,37 @@ final class AddressTest extends TestCase
 
         new Address(...[$field => $value]);
     }
+
+    public function testCountryFieldsToArray(): void
+    {
+        $address = new Address(state: 'EX', countryCode: '2496', countryName: 'Estados Unidos');
+
+        $this->assertSame([
+            'state' => 'EX',
+            'country_code' => '2496',
+            'country_name' => 'Estados Unidos',
+        ], $address->toArray());
+    }
+
+    public function testCountryFieldsAreLeftOutWhenUnset(): void
+    {
+        $address = new Address(state: 'SC', zipCode: '89201100');
+
+        $this->assertSame(['state' => 'SC', 'zip_code' => '89201100'], $address->toArray());
+    }
+
+    public function testDoesNotCheckTheBacenCheckDigit(): void
+    {
+        $address = new Address(state: 'EX', countryCode: '0001');
+
+        $this->assertSame('0001', $address->countryCode);
+    }
+
+    public function testStateExIsAbroadInAnyCase(): void
+    {
+        $this->assertTrue((new Address(state: 'EX'))->isAbroad());
+        $this->assertTrue((new Address(state: 'ex'))->isAbroad());
+        $this->assertFalse((new Address(state: 'SC'))->isAbroad());
+        $this->assertFalse((new Address())->isAbroad());
+    }
 }
