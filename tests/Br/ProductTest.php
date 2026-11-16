@@ -606,7 +606,7 @@ final class ProductTest extends TestCase
         );
 
         $br = $product->toArray()['product']['br'];
-        $this->assertSame('value', $br['custom_field']);
+        $this->assertSame('value', $br['extra_groups']['custom_field']);
         $this->assertSame('320102001', $br['fuel']['anp_code']);
     }
 }
