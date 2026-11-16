@@ -69,18 +69,34 @@ final class ProductTest extends TestCase
         );
     }
 
-    public function testExtraGroupsMergedIntoBr(): void
+    public function testALayoutGroupGoesUnderExtraGroups(): void
     {
         $product = new Product(
             description: 'Produto',
             amount: 50.0,
             ncm: '84713012',
             cfop: '5102',
-            extraGroups: ['custom_field' => 'value'],
+            extraGroups: ['veicProd' => ['chassi' => 'X']],
         );
-        $data = $product->toArray();
+        $br = $product->toArray()['product']['br'];
 
-        $this->assertSame('value', $data['product']['br']['custom_field']);
+        $this->assertSame(['veicProd' => ['chassi' => 'X']], $br['extra_groups']);
+        $this->assertArrayNotHasKey('veicProd', $br);
+    }
+
+    public function testAKnownBrFieldStaysOnBr(): void
+    {
+        $product = new Product(
+            description: 'Produto',
+            amount: 50.0,
+            ncm: '84713012',
+            cfop: '5102',
+            extraGroups: ['ex_tipi' => '01'],
+        );
+        $br = $product->toArray()['product']['br'];
+
+        $this->assertSame('01', $br['ex_tipi']);
+        $this->assertArrayNotHasKey('extra_groups', $br);
     }
 
     public function testRawTaxArrayPassedThrough(): void
