@@ -20,6 +20,10 @@ use Stackin\Errors\InvoiceError;
  * `barcode` (cEAN) must be `SEM GTIN` or a GTIN of 8, 12, 13 or 14
  * digits whose GS1 check digit is right. `recopiNumber` must be the
  * 20-digit RECOPI number with its two modulo-11 check digits right.
+ *
+ * `fuel` is the NF-e fuel group (`comb`), sent under `br.fuel`. It is the
+ * one way to send that group: `extraGroups` carrying a `comb` (or a
+ * `fuel`) next to it is refused.
  */
 final class Product
 {
@@ -60,7 +64,11 @@ final class Product
         public readonly ?float $unitPrice = null,
         /** @var array<string, mixed>|null */
         public readonly ?array $ibsCbs = null,
+        public readonly ?Fuel $fuel = null,
     ) {
+        if ($fuel !== null && $extraGroups !== null && self::carriesFuelGroup($extraGroups)) {
+            throw new InvoiceError('send the fuel group once: fuel or extraGroups comb');
+        }
         if ($ncm !== null && preg_match('/^(00|\d{8})$/', $ncm) !== 1) {
             throw new InvoiceError(
                 'ncm must be the full 8 digits, or 00 for a service line; '
@@ -81,6 +89,21 @@ final class Product
         if ($recopiNumber !== null && !self::validRecopiCheckDigits($recopiNumber)) {
             throw new InvoiceError('recopiNumber has invalid check digits');
         }
+    }
+
+    /**
+     * Whether the passthrough groups already hold the fuel group, either
+     * merged straight into `br` or under its `extra_groups`.
+     *
+     * @param array<string, mixed> $extraGroups
+     */
+    private static function carriesFuelGroup(array $extraGroups): bool
+    {
+        $nested = $extraGroups['extra_groups'] ?? null;
+
+        return array_key_exists('comb', $extraGroups)
+            || array_key_exists('fuel', $extraGroups)
+            || (is_array($nested) && array_key_exists('comb', $nested));
     }
 
     /**
@@ -166,6 +189,7 @@ final class Product
                 'recopi_number' => $this->recopiNumber,
                 'tax' => $this->tax,
                 'ibs_cbs' => $this->ibsCbs,
+                'fuel' => $this->fuel?->toArray(),
             ],
             static fn (mixed $value): bool => $value !== null,
         );

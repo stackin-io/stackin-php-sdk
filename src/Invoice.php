@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Stackin;
 
+use DateTimeInterface;
 use GuzzleHttp\Client as HttpClient;
 use GuzzleHttp\Exception\GuzzleException;
 use Stackin\Br\Product;
@@ -24,7 +25,8 @@ final class Invoice extends Client
      * Rejects a missing or partial buyer address before the network call —
      * the SEFAZ rejects a partial enderDest (274/726/696/695). cityCode is
      * not required: the API resolves it from city and state, and answers
-     * CITY_NOT_FOUND (422) when it cannot.
+     * CITY_NOT_FOUND (422) when it cannot. A buyer abroad (state EX) has
+     * no zipCode either.
      */
     private static function validateNfeAddress(?Address $address): void
     {
@@ -32,7 +34,7 @@ final class Invoice extends Client
             throw new InvoiceError('recipientAddress is required for NFE');
         }
 
-        self::requireAddressFields($address, 'NFE');
+        self::requireAddressFields($address, 'NFE', $address->isAbroad());
     }
 
     /**
@@ -58,16 +60,21 @@ final class Invoice extends Client
         self::requireAddressFields($address, 'NFSE when any item has tax_retained=true');
     }
 
-    private static function requireAddressFields(Address $address, string $context): void
-    {
+    private static function requireAddressFields(
+        Address $address,
+        string $context,
+        bool $abroad = false,
+    ): void {
         $fields = [
             'street' => $address->street,
             'number' => $address->number,
             'neighborhood' => $address->neighborhood,
             'city' => $address->city,
             'state' => $address->state,
-            'zipCode' => $address->zipCode,
         ];
+        if (!$abroad) {
+            $fields['zipCode'] = $address->zipCode;
+        }
 
         $missing = array_keys(array_filter(
             $fields,
@@ -112,6 +119,7 @@ final class Invoice extends Client
             $fields["items[{$index}].purchase_order"] = $item->purchaseOrder;
             $fields["items[{$index}].purchase_order_item"] = $item->purchaseOrderItem;
             $fields["items[{$index}].observations"] = $item->observations;
+            $fields["items[{$index}].fuel.anp_description"] = $item->fuel?->anpDescription;
         }
         foreach ($address?->toArray() ?? [] as $key => $value) {
             $fields["recipient_address.{$key}"] = $value;
@@ -134,6 +142,14 @@ final class Invoice extends Client
     }
 
     /**
+     * Money as the API takes it: a decimal string, never a binary float.
+     */
+    private static function decimalString(?float $value): ?string
+    {
+        return $value === null ? null : rtrim(rtrim(number_format($value, 10, '.', ''), '0'), '.');
+    }
+
+    /**
      * Issues a fiscal document.
      *
      * Pass $idempotencyKey to make a retry safe: the same key with the same
@@ -143,19 +159,45 @@ final class Invoice extends Client
      * number say (up to 255 characters): stored as sent and returned on every
      * read and webhook. It is left out of the request when null.
      *
+     * Every argument after it is optional too and left out of the request
+     * when null, so a call that does not pass them sends the same body:
+     *
+     * - $discount: a discount on the whole document, in BRL, spread by the
+     *   API over the lines.
+     * - $issuedAt: the emission moment, sent as RFC 3339 with its offset.
+     *   NF-e: at most 30 days back and 5 minutes ahead; NFS-e: never ahead.
+     * - NF-e only: $purpose (normal by default), $direction (out by
+     *   default) and $referencedKeys, the 44-character access keys of the
+     *   documents this one refers to — required for a complementary note
+     *   and, but for a few CFOPs, for a return.
+     * - NF-e to a buyer abroad (recipientAddress state EX): $taxId is left
+     *   out (null), $foreignId identifies the buyer and $export says where
+     *   the goods leave Brazil.
+     *
+     * $taxId is required everywhere else. The fiscal rules between these
+     * fields belong to the API, which answers them by name.
+     *
      * @param Product[] $items
+     * @param string[]|null $referencedKeys
      * @return array<string, mixed>
      */
     public function issue(
         DocumentType $documentType,
         string $clientName,
-        string $taxId,
+        ?string $taxId,
         array $items,
         ?Address $recipientAddress = null,
         ?string $series = null,
         ?string $number = null,
         ?string $idempotencyKey = null,
         ?string $externalReference = null,
+        ?float $discount = null,
+        ?DateTimeInterface $issuedAt = null,
+        ?Purpose $purpose = null,
+        ?Direction $direction = null,
+        ?array $referencedKeys = null,
+        ?string $foreignId = null,
+        ?Export $export = null,
     ): array {
         if ($items === []) {
             throw new InvoiceError("items can't be empty");
@@ -179,6 +221,14 @@ final class Invoice extends Client
             self::validateNfeLatin1($clientName, $items, $recipientAddress);
         }
 
+        $abroad = $documentType === DocumentType::NFE && $recipientAddress?->isAbroad();
+        if ($taxId === null && !$abroad) {
+            throw new InvoiceError(
+                'taxId is required, except for an NF-e to a buyer abroad '
+                . '(recipientAddress state EX)',
+            );
+        }
+
         if ($documentType === DocumentType::NFSE) {
             self::validateNfseRetainedAddress($items, $recipientAddress);
         }
@@ -186,9 +236,14 @@ final class Invoice extends Client
         $payload = [
             'document_type' => $documentType->value,
             'client_name' => $clientName,
-            'tax_id' => $taxId,
-            'items' => array_map(static fn (Product $item): array => $item->toArray(), $items),
         ];
+        if ($taxId !== null) {
+            $payload['tax_id'] = $taxId;
+        }
+        $payload['items'] = array_map(
+            static fn (Product $item): array => $item->toArray(),
+            $items,
+        );
         if ($recipientAddress !== null) {
             $payload['recipient_address'] = $recipientAddress->toArray();
         }
@@ -200,6 +255,20 @@ final class Invoice extends Client
         }
         if ($externalReference !== null) {
             $payload['external_reference'] = $externalReference;
+        }
+        $optional = [
+            'discount' => self::decimalString($discount),
+            'issued_at' => $issuedAt?->format(DateTimeInterface::RFC3339),
+            'purpose' => $purpose?->value,
+            'direction' => $direction?->value,
+            'referenced_keys' => $referencedKeys === null ? null : array_values($referencedKeys),
+            'foreign_id' => $foreignId,
+            'export' => $export?->toArray(),
+        ];
+        foreach ($optional as $key => $value) {
+            if ($value !== null) {
+                $payload[$key] = $value;
+            }
         }
 
         return $this->request(
