@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.14.0 — 2026-11-15
+
+### Features
+- **invoice:** discount, issuedAt, purpose, direction, referenced keys and export on issue()
+- **product:** fuel group under br.fuel
+- **address:** country code and name for a buyer abroad
+
+### Bug Fixes
+- **product:** layout groups go under br.extra_groups
+
+### Docs
+- **readme:** discount, issuedAt, returns, buyers abroad and fuel
+
 ## v0.13.0 — 2026-11-15
 
 ### Features
