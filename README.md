@@ -105,6 +105,88 @@ The recipient `Address` passed to `issue()` is the buyer's address — **require
 
 On NFSE it is the tomador's address: optional, except when any item has `taxRetained: true` (ISSQN retained by the tomador), where the city authorizer refuses the document without it. Then it is required and complete — every field except `cityCode` — and a missing or incomplete one also throws an `InvoiceError` locally.
 
+## Discounts, dates, returns and exports
+
+`issue()` takes a few more optional arguments, after the ones above. Each is left out of the request when not given, so a call that does not pass them sends exactly what it sent before.
+
+| Argument | Wire | What it is |
+|---|---|---|
+| `discount` | `discount` | A discount on the whole document, in BRL, spread by the API over the lines. |
+| `issuedAt` | `issued_at` | The emission moment, a `DateTimeInterface` sent as RFC 3339 with its offset. NF-e: at most 30 days back and 5 minutes ahead; NFS-e: never ahead. |
+| `purpose` | `purpose` | NF-e only. `Purpose::NORMAL` (the default), `COMPLEMENTARY`, `ADJUSTMENT` or `RETURN`. |
+| `direction` | `direction` | NF-e only. `Direction::OUT` (the default) or `IN`, for a note the company issues for goods it receives. |
+| `referencedKeys` | `referenced_keys` | NF-e only. The 44-character access keys this note refers to: exactly one for a complementary note, and the returned note for a return. |
+| `foreignId` | `foreign_id` | NF-e to a buyer abroad: their passport or other document, 5 to 20 characters. May be left out. |
+| `export` | `export` | NF-e to a buyer abroad: an `Export` saying where the goods leave Brazil. |
+
+A return of goods the buyer sent back:
+
+```php
+use Stackin\Direction;
+use Stackin\Purpose;
+
+$invoice->issue(
+    DocumentType::NFE,
+    'Comercial Silva Ltda',
+    '11222333000181',
+    [new Product(description: 'Notebook', amount: 3500.00, ncm: '84713012', cfop: '1202')],
+    $address,
+    issuedAt: new DateTimeImmutable('now', new DateTimeZone('America/Sao_Paulo')),
+    purpose: Purpose::RETURN,
+    direction: Direction::IN,
+    referencedKeys: ['35240112345678000190550010000001231234567890'],
+);
+```
+
+A buyer abroad is `state: 'EX'` on the address. There `zipCode` and `cityCode` may be left out, `countryCode` (the BACEN code, not 1058) and `countryName` name the country, and `taxId` is `null` — the buyer has no CPF or CNPJ:
+
+```php
+use Stackin\Export;
+
+$invoice->issue(
+    DocumentType::NFE,
+    'Importadora Sur S.A.',
+    null,
+    [new Product(description: 'Notebook', amount: 3500.00, ncm: '84713012', cfop: '7102')],
+    new Address(
+        state: 'EX',
+        street: 'Avenida Corrientes',
+        number: '1500',
+        neighborhood: 'San Nicolas',
+        city: 'Buenos Aires',
+        countryCode: '0639',
+        countryName: 'Argentina',
+    ),
+    foreignId: 'AR1234567',
+    export: new Export(exitState: 'RS', place: 'Uruguaiana', dispatchPlace: 'Porto Seco'),
+);
+```
+
+Anywhere else a `null` `taxId` throws an `InvoiceError` locally. The SDK checks the types and nothing more: which combinations the SEFAZ accepts — a complementary note without its key, an export leaving from `EX` — is the API's answer, by name.
+
+A fuel sold under a fuel CFOP needs the layout's `comb` group, as a `Fuel` on the item. It goes on the wire under `br.fuel`; passing a `comb` through `extraGroups` as well throws an `InvoiceError`.
+
+```php
+use Stackin\Br\Fuel;
+
+new Product(
+    description: 'Gasolina C comum',
+    amount: 619.00,
+    quantity: 100.0,
+    unit: 'L',
+    ncm: '27101259',
+    cfop: '5656',
+    fuel: new Fuel(
+        anpCode: '320102001',
+        anpDescription: 'GASOLINA C COMUM',
+        consumerState: 'SC',
+        biodieselPercent: 0.0,
+    ),
+);
+```
+
+`Fuel` also takes `glpPercent`, `naturalGasNationalPercent`, `naturalGasImportedPercent` and `startingValue` (GLP only), `codif` and `temperatureQuantity`.
+
 ## Retrying safely
 
 Issuing is the one call you must not repeat blindly. If the response is lost — a
