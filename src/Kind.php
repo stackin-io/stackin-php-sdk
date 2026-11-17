@@ -10,7 +10,7 @@ namespace Stackin;
 final class Kind
 {
     /**
-     * @param callable(string, array<string, string>): array<string, mixed> $call
+     * @param callable(string, array<string, string>, ?string): array<string, mixed> $call
      */
     public function __construct(
         private $call,
@@ -25,7 +25,7 @@ final class Kind
      *
      * @return array<string, mixed>
      */
-    public function get(string $code, ?string $country = null): array
+    public function get(string $code, ?string $country = null, ?string $company = null): array
     {
         $name = FiscalReference::segment($this->name);
         $escaped = FiscalReference::segment($code);
@@ -33,6 +33,7 @@ final class Kind
         return ($this->call)(
             "/fiscal-references/{$name}/{$escaped}",
             ['country' => $country ?? $this->country],
+            $company,
         );
     }
 
@@ -53,6 +54,7 @@ final class Kind
         ?string $country = null,
         ?int $limit = null,
         ?int $offset = null,
+        ?string $company = null,
     ): array {
         return ($this->call)(
             '/fiscal-references',
@@ -63,6 +65,7 @@ final class Kind
                 $limit,
                 $offset,
             ),
+            $company,
         );
     }
 }

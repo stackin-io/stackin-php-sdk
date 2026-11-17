@@ -198,6 +198,7 @@ final class Invoice extends Client
         ?array $referencedKeys = null,
         ?string $foreignId = null,
         ?Export $export = null,
+        ?string $company = null,
     ): array {
         if ($items === []) {
             throw new InvoiceError("items can't be empty");
@@ -276,6 +277,7 @@ final class Invoice extends Client
             '/invoices',
             json: $payload,
             idempotencyKey: $idempotencyKey,
+            company: $company,
         );
     }
 
@@ -284,12 +286,16 @@ final class Invoice extends Client
      *
      * @return array<string, mixed>
      */
-    public function consult(string $accessKey, DocumentType $documentType): array
-    {
+    public function consult(
+        string $accessKey,
+        DocumentType $documentType,
+        ?string $company = null,
+    ): array {
         return $this->request(
             'GET',
             "/invoices/{$accessKey}",
             query: ['document_type' => $documentType->value],
+            company: $company,
         );
     }
 
@@ -306,6 +312,7 @@ final class Invoice extends Client
         DocumentType $documentType,
         string $reason,
         ?string $idempotencyKey = null,
+        ?string $company = null,
     ): array {
         $payload = [
             'document_type' => $documentType->value,
@@ -317,6 +324,7 @@ final class Invoice extends Client
             "/invoices/{$accessKey}/cancel",
             json: $payload,
             idempotencyKey: $idempotencyKey,
+            company: $company,
         );
     }
 
@@ -330,6 +338,7 @@ final class Invoice extends Client
         int $numberStart,
         int $numberEnd,
         string $reason,
+        ?string $company = null,
     ): array {
         $length = mb_strlen($reason);
         if ($length < 15 || $length > 255) {
@@ -346,7 +355,12 @@ final class Invoice extends Client
             'reason' => $reason,
         ];
 
-        return $this->request('POST', '/invoices/invalidations', json: $payload);
+        return $this->request(
+            'POST',
+            '/invoices/invalidations',
+            json: $payload,
+            company: $company,
+        );
     }
 
     /**
@@ -365,6 +379,7 @@ final class Invoice extends Client
         string $accessKey,
         DocumentType $documentType,
         string $correction,
+        ?string $company = null,
     ): array {
         if (preg_match('/^[0-9]{6}[0-9A-Z]{12}[0-9]{26}$/D', $accessKey) !== 1) {
             throw new InvoiceError(
@@ -381,7 +396,12 @@ final class Invoice extends Client
             'correction' => $correction,
         ];
 
-        return $this->request('POST', "/invoices/{$accessKey}/correction", json: $payload);
+        return $this->request(
+            'POST',
+            "/invoices/{$accessKey}/correction",
+            json: $payload,
+            company: $company,
+        );
     }
 
     /**
@@ -389,12 +409,16 @@ final class Invoice extends Client
      *
      * @return array<string, mixed>
      */
-    public function reissue(string $invoiceId, ?string $idempotencyKey = null): array
-    {
+    public function reissue(
+        string $invoiceId,
+        ?string $idempotencyKey = null,
+        ?string $company = null,
+    ): array {
         return $this->request(
             'POST',
             "/invoices/{$invoiceId}/reissue",
             idempotencyKey: $idempotencyKey,
+            company: $company,
         );
     }
 
@@ -412,8 +436,11 @@ final class Invoice extends Client
      *
      * @return array<string, mixed>
      */
-    public function received(?int $limit = null, ?int $offset = null): array
-    {
+    public function received(
+        ?int $limit = null,
+        ?int $offset = null,
+        ?string $company = null,
+    ): array {
         $query = [];
         if ($limit !== null) {
             $query['limit'] = (string) $limit;
@@ -422,7 +449,7 @@ final class Invoice extends Client
             $query['offset'] = (string) $offset;
         }
 
-        return $this->request('GET', '/received-invoices', query: $query);
+        return $this->request('GET', '/received-invoices', query: $query, company: $company);
     }
 
     /**
@@ -440,6 +467,7 @@ final class Invoice extends Client
         ?int $offset = null,
         ?string $sortBy = null,
         ?string $orderBy = null,
+        ?string $company = null,
     ): array {
         $query = [];
         if ($documentType !== null) {
@@ -461,7 +489,7 @@ final class Invoice extends Client
             $query['order_by'] = $orderBy;
         }
 
-        return $this->request('GET', '/invoices', query: $query);
+        return $this->request('GET', '/invoices', query: $query, company: $company);
     }
 
     /**
@@ -473,9 +501,13 @@ final class Invoice extends Client
      *
      * @return array<int, array<string, mixed>>
      */
-    public function submissions(string $invoiceId): array
+    public function submissions(string $invoiceId, ?string $company = null): array
     {
-        $rows = $this->request('GET', "/invoices/{$invoiceId}/submissions");
+        $rows = $this->request(
+            'GET',
+            "/invoices/{$invoiceId}/submissions",
+            company: $company,
+        );
         if (!array_is_list($rows)) {
             throw new InvoiceError('unexpected response shape: expected a list');
         }
@@ -496,6 +528,7 @@ final class Invoice extends Client
         string $accessKey,
         Manifestation $manifestation,
         ?string $reason = null,
+        ?string $company = null,
     ): array {
         $needsReason = $manifestation === Manifestation::OPERACAO_NAO_REALIZADA;
         if ($needsReason && ($reason === null || $reason === '')) {
@@ -518,6 +551,7 @@ final class Invoice extends Client
             'POST',
             "/received-invoices/{$accessKey}/manifestation",
             json: $payload,
+            company: $company,
         );
     }
 
@@ -530,12 +564,16 @@ final class Invoice extends Client
      * status 502 means the authorizer is unavailable, not that the
      * invoice is wrong. NFS-e only.
      */
-    public function pdf(string $accessKey, DocumentType $documentType): string
-    {
+    public function pdf(
+        string $accessKey,
+        DocumentType $documentType,
+        ?string $company = null,
+    ): string {
         return $this->send(
             'GET',
             "/invoices/{$accessKey}/pdf",
             query: ['document_type' => $documentType->value],
+            company: $company,
         );
     }
 }

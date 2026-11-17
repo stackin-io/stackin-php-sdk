@@ -27,7 +27,7 @@ final class Taxpayer extends Client
      *
      * @return array<string, mixed>
      */
-    public function get(string $taxId, ?string $country = null): array
+    public function get(string $taxId, ?string $country = null, ?string $company = null): array
     {
         $escaped = FiscalReference::segment($taxId);
 
@@ -36,6 +36,7 @@ final class Taxpayer extends Client
             "/taxpayers/{$escaped}",
             null,
             ['country' => $country ?? $this->country],
+            company: $company,
         );
     }
 }
