@@ -373,6 +373,58 @@ Three things worth knowing before you loop:
 
 `Taxpayer` has one method and keeps one: the registry holds the names and addresses of real people, so there is no search over it, by design.
 
+## Saved clients
+
+The company keeps the recipients it issues to. A successful issuance saves a new
+recipient on its own; `Clients` reads and edits them, and `issue(clientId: ...)` issues
+to one without retyping it.
+
+```php
+use Stackin\Clients;
+use Stackin\Errors\ClientAlreadyExistsError;
+
+$clients = new Clients(apiKey: '...');
+
+$clients->list(search: 'acme', limit: 20);          // active ones, by name
+$clients->list(isActive: false);                    // the deactivated ones
+
+try {
+    $acme = $clients->create(name: 'ACME Ltda', taxId: '11.222.333/0001-81');
+} catch (ClientAlreadyExistsError $error) {
+    $acme = $clients->get($error->clientId);        // it was there already
+}
+
+$clients->update($acme['id'], ['phone' => '+5511999999999', 'notes' => null]); // null clears
+$clients->deactivate($acme['id']);                  // kept, hidden from list()
+$clients->reactivate($acme['id']);
+
+(new Invoice(apiKey: '...'))->issue(
+    documentType: DocumentType::NFSE,
+    clientName: null,                               // name, tax id, address from the client
+    taxId: null,
+    items: [/* ... */],
+    clientId: $acme['id'],
+);
+```
+
+- `list()` filters by `search` (part of the name, the tax id masked or not, or the
+  foreign id), `source` (`manual`, `issued`, `issuance`) and `isActive` (the API lists
+  active clients when it is null), and pages with `limit`/`offset`. `sortBy` takes
+  `name`, `last_used_at`, `created_at` or `uses_count`.
+- `update()` takes the changes keyed by their API names (`name`, `tax_id`, `foreign_id`,
+  `state_registration`, `municipal_registration`, `email`, `phone`, `address`, `notes`,
+  `is_active`) and sends only those; `address` (an `Address` or an array) replaces the
+  whole address. The API checks the client as a whole, so clearing a Brazilian client's
+  `tax_id` is refused like a create without one.
+- On `issue()`, the client fills whichever of `clientName`, `taxId`, `foreignId` and
+  `recipientAddress` are null; the ones given win. With `clientId` none of those four is
+  required by the SDK: the API checks the merged request. A deactivated client is refused
+  there (422) until it is reactivated.
+- `updateClient: true` on `issue()` rewrites an existing client with that request's
+  recipient data. Left false, the issuance only counts one more use of it.
+- Reading needs `invoice:read`; creating, editing and deactivating need `invoice:issue`.
+  `company` works here as on `Invoice`, on the client or per call.
+
 ## One credential, several companies
 
 An API key is always one company and needs none of this. An OAuth credential can cover
@@ -404,9 +456,10 @@ too. With no company set no header is sent, so the request is exactly what it wa
   - `Stackin\Errors\CompanyRequiredError` — `422`: the credential covers several companies and the request named none. `companies` lists them.
   - `Stackin\Errors\CompanyNotInScopeError` — `403`: the named company is not covered. `companies` lists the ones that are.
   - `Stackin\Errors\InsufficientPermissionError` — `403`: the credential reaches the company but lacks this permission there. `description` reads `needs X, has Y, company=<id>`.
+- `Stackin\Errors\ClientAlreadyExistsError` — `409` (an `ApiError`): `Clients::create()` or `update()` with a tax id or foreign id the company already has on another client. `clientId` names that client.
 - `Stackin\Errors\ConnectionFailedError` — the API didn't respond (network/DNS/timeout).
 - `Stackin\Errors\InvoiceError` — a request that would obviously fail server-side, caught before the network call:
-  - `issue()`'s items is empty, missing `ncm`/`cfop` on an item for NFE, or a missing/incomplete recipient `Address` on NFE (any field but `cityCode`).
+  - `issue()` without `clientName` or `taxId` and no `clientId` (`taxId` may be null for an NF-e to a buyer abroad), items is empty, missing `ncm`/`cfop` on an item for NFE, or a missing/incomplete recipient `Address` on NFE (any field but `cityCode`).
   - a `Product` built with an `ncm` that is not the full 8 digits, or `00` for a service line — SEFAZ rejects any other 2-digit chapter with `777`.
   - a `Product` built with a `barcode` (cEAN) that is neither `SEM GTIN` nor 8, 12, 13 or 14 digits, or whose GS1 check digit is wrong.
   - a `Product` built with a `recopiNumber` that is not the 20-digit RECOPI number; the SDK checks its two modulo-11 check digits (MOC §8.5) before sending.
