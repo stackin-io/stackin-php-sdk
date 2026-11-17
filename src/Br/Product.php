@@ -24,6 +24,9 @@ use Stackin\Errors\InvoiceError;
  * `fuel` is the NF-e fuel group (`comb`), sent under `br.fuel`. It is the
  * one way to send that group: `extraGroups` carrying a `comb` (or a
  * `fuel`) next to it is refused.
+ *
+ * `ibsCbs` is the IBS/CBS group, sent under `br.ibs_cbs`: an `IbsCbs`, or
+ * the same keys as a plain array.
  */
 final class Product
 {
@@ -62,8 +65,8 @@ final class Product
         public readonly bool $taxRetained = false,
         public readonly ?string $observations = null,
         public readonly ?float $unitPrice = null,
-        /** @var array<string, mixed>|null */
-        public readonly ?array $ibsCbs = null,
+        /** @var IbsCbs|array<string, mixed>|null */
+        public readonly IbsCbs|array|null $ibsCbs = null,
         public readonly ?Fuel $fuel = null,
     ) {
         if ($fuel !== null && $extraGroups !== null && self::carriesFuelGroup($extraGroups)) {
@@ -188,7 +191,9 @@ final class Product
                 'import_content_control_number' => $this->importContentControlNumber,
                 'recopi_number' => $this->recopiNumber,
                 'tax' => $this->tax,
-                'ibs_cbs' => $this->ibsCbs,
+                'ibs_cbs' => $this->ibsCbs instanceof IbsCbs
+                    ? $this->ibsCbs->toArray()
+                    : $this->ibsCbs,
                 'fuel' => $this->fuel?->toArray(),
             ],
             static fn (mixed $value): bool => $value !== null,

@@ -187,6 +187,28 @@ new Product(
 
 `Fuel` also takes `glpPercent`, `naturalGasNationalPercent`, `naturalGasImportedPercent` and `startingValue` (GLP only), `codif` and `temperatureQuantity`.
 
+An item's IBS/CBS group (Reforma Tributária) is an `IbsCbs` on the item, sent under `br.ibs_cbs`: `cst`, `classification` (cClassTrib), `rateState`, `rateCity` and `rateFederal`, plus `base`, `reductionIbs` and `reductionCbs`, which are left off the request when null. `reductionIbs` is the IBS pRedAliq (state and municipality) and `reductionCbs` the CBS pRedAliq, both in percent (0–100): the cClassTrib's `pRedIBS` and `pRedCBS` in the official classification table. The API asks for them on CST 011, 200 and 515 and refuses them on any other; the SDK leaves that rule to the API. A plain array with the same snake_case keys is still accepted and sent as given.
+
+```php
+use Stackin\Br\IbsCbs;
+
+new Product(
+    description: 'Medicamento',
+    amount: 100.00,
+    ncm: '30049099',
+    cfop: '5102',
+    ibsCbs: new IbsCbs(
+        cst: '200',
+        classification: '200009',
+        rateState: 0.1,
+        rateCity: 0.0,
+        rateFederal: 0.9,
+        reductionIbs: 60.0,
+        reductionCbs: 60.0,
+    ),
+);
+```
+
 ## Retrying safely
 
 Issuing is the one call you must not repeat blindly. If the response is lost — a

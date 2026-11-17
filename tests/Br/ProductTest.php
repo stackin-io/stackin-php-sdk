@@ -7,6 +7,7 @@ namespace Stackin\Tests\Br;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Stackin\Br\Fuel;
+use Stackin\Br\IbsCbs;
 use Stackin\Br\Product;
 use Stackin\Errors\InvoiceError;
 
@@ -274,6 +275,73 @@ final class ProductTest extends TestCase
 
         $this->assertSame('000', $br['ibs_cbs']['cst']);
         $this->assertSame('000001', $br['ibs_cbs']['classification']);
+    }
+
+    public function testIbsCbsGroupLeavesTheReductionsOutWhenNotGiven(): void
+    {
+        $product = new Product(
+            description: 'Teclado',
+            unitPrice: 120.00,
+            ibsCbs: new IbsCbs(
+                cst: '000',
+                classification: '000001',
+                rateState: 0.1,
+                rateCity: 0.0,
+                rateFederal: 0.9,
+            ),
+        );
+
+        $this->assertSame(
+            [
+                'cst' => '000',
+                'classification' => '000001',
+                'rate_state' => 0.1,
+                'rate_city' => 0.0,
+                'rate_federal' => 0.9,
+            ],
+            $product->toArray()['product']['br']['ibs_cbs'],
+        );
+    }
+
+    public function testIbsCbsGroupCarriesTheReductionsWhenGiven(): void
+    {
+        $product = new Product(
+            description: 'Medicamento',
+            unitPrice: 100.00,
+            ibsCbs: new IbsCbs(
+                cst: '200',
+                classification: '200009',
+                rateState: 0.1,
+                rateCity: 0.0,
+                rateFederal: 0.9,
+                base: 100.0,
+                reductionIbs: 60.0,
+                reductionCbs: 0.0,
+            ),
+        );
+
+        $group = $product->toArray()['product']['br']['ibs_cbs'];
+
+        $this->assertSame(100.0, $group['base']);
+        $this->assertSame(60.0, $group['reduction_ibs']);
+        $this->assertSame(0.0, $group['reduction_cbs']);
+    }
+
+    public function testIbsCbsAsAnArrayIsSentUnchanged(): void
+    {
+        $group = [
+            'cst' => '011',
+            'classification' => '011001',
+            'rate_state' => 0.1,
+            'rate_city' => 0.0,
+            'rate_federal' => 0.9,
+            'reduction_ibs' => 30.0,
+            'reduction_cbs' => 30.0,
+        ];
+
+        $product = new Product(description: 'Teclado', unitPrice: 10.00, ibsCbs: $group);
+
+        $this->assertSame($group, $product->toArray()['product']['br']['ibs_cbs']);
     }
 
     public function testAnItemWithoutIbsCbsSendsNothing(): void
