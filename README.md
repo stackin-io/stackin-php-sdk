@@ -351,9 +351,37 @@ Three things worth knowing before you loop:
 
 `Taxpayer` has one method and keeps one: the registry holds the names and addresses of real people, so there is no search over it, by design.
 
+## One credential, several companies
+
+An API key is always one company and needs none of this. An OAuth credential can cover
+several companies, each with its own permissions; name the one a request acts for with
+`company`, by its id or its CNPJ (punctuation is ignored). It goes out as the
+`X-Stackin-Company` header on every request, lookups included.
+
+```php
+$invoice = new Invoice(apiKey: '...', company: '00.000.000/0001-91');
+
+$invoice->history();                                    // that company
+$invoice->history(company: '7b0c1f9e-3a52-4d8e-9f61-2c4b8a1d5e70'); // this call only
+
+$invoice->companies();
+// ['environment' => 'production', 'companies' => [
+//     ['company_id' => '...', 'name' => '...', 'tax_id' => '...', 'permissions' => [...]],
+// ]]
+```
+
+Every method takes `company:` for a single call, and `FiscalReference` and `Taxpayer` take it
+too. With no company set no header is sent, so the request is exactly what it was before.
+`companies()` (`GET /api/v1/me/companies`) lists what the credential reaches and the ids
+`company` accepts.
+
 ## Errors
 
 - `Stackin\Errors\ApiError` — the API responded with a non-2xx status (`statusCode`/`detail` properties) — a 401 here means `api_key` is missing, wrong, or was rotated.
+- The company refusals extend `ApiError`, so a `catch (ApiError)` still catches them. None is retried:
+  - `Stackin\Errors\CompanyRequiredError` — `422`: the credential covers several companies and the request named none. `companies` lists them.
+  - `Stackin\Errors\CompanyNotInScopeError` — `403`: the named company is not covered. `companies` lists the ones that are.
+  - `Stackin\Errors\InsufficientPermissionError` — `403`: the credential reaches the company but lacks this permission there. `description` reads `needs X, has Y, company=<id>`.
 - `Stackin\Errors\ConnectionFailedError` — the API didn't respond (network/DNS/timeout).
 - `Stackin\Errors\InvoiceError` — a request that would obviously fail server-side, caught before the network call:
   - `issue()`'s items is empty, missing `ncm`/`cfop` on an item for NFE, or a missing/incomplete recipient `Address` on NFE (any field but `cityCode`).
