@@ -7,6 +7,7 @@ namespace Stackin;
 use GuzzleHttp\Client as HttpClient;
 use GuzzleHttp\Exception\GuzzleException;
 use Stackin\Errors\ApiError;
+use Stackin\Errors\ClientAlreadyExistsError;
 use Stackin\Errors\CompanyNotInScopeError;
 use Stackin\Errors\CompanyRequiredError;
 use Stackin\Errors\ConnectionFailedError;
@@ -15,7 +16,7 @@ use Stackin\Errors\InsufficientPermissionError;
 /**
  * Where an api key becomes an HTTP call, for every entry point.
  *
- * Invoice, FiscalReference and Taxpayer all extend it, so one
+ * Invoice, Clients, FiscalReference and Taxpayer all extend it, so one
  * constructor configures every client and one code path issues every
  * request. A caller never instantiates this.
  */
@@ -187,6 +188,16 @@ abstract class Client
                 $status,
                 $text,
                 is_string($description) ? $description : '',
+            );
+        }
+
+        if ($status === 409 && ($detail['code'] ?? null) === 'CLIENT_EXISTS') {
+            $clientId = $detail['client_id'] ?? '';
+
+            return new ClientAlreadyExistsError(
+                $status,
+                $text,
+                is_string($clientId) ? $clientId : '',
             );
         }
 

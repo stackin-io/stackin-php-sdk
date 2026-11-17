@@ -108,7 +108,7 @@ final class Invoice extends Client
      * @param Product[] $items
      */
     private static function validateNfeLatin1(
-        string $clientName,
+        ?string $clientName,
         array $items,
         ?Address $address,
     ): void {
@@ -177,13 +177,22 @@ final class Invoice extends Client
      * $taxId is required everywhere else. The fiscal rules between these
      * fields belong to the API, which answers them by name.
      *
+     * $clientId names a saved client of the company (see Clients): its
+     * name, tax id, foreign id and address fill whichever of $clientName,
+     * $taxId, $foreignId and $recipientAddress are null, and the ones
+     * given win. Those four are then not required here: the API checks
+     * the merged request. After a successful issuance a new recipient is
+     * saved as a client; $updateClient true also rewrites an existing one
+     * with this request's recipient data. Both are left out of the
+     * request when unset.
+     *
      * @param Product[] $items
      * @param string[]|null $referencedKeys
      * @return array<string, mixed>
      */
     public function issue(
         DocumentType $documentType,
-        string $clientName,
+        ?string $clientName,
         ?string $taxId,
         array $items,
         ?Address $recipientAddress = null,
@@ -199,9 +208,16 @@ final class Invoice extends Client
         ?string $foreignId = null,
         ?Export $export = null,
         ?string $company = null,
+        ?string $clientId = null,
+        bool $updateClient = false,
     ): array {
         if ($items === []) {
             throw new InvoiceError("items can't be empty");
+        }
+
+        $fromClient = $clientId !== null;
+        if ($clientName === null && !$fromClient) {
+            throw new InvoiceError('clientName is required unless clientId is given');
         }
 
         if ($documentType === DocumentType::NFE) {
@@ -218,26 +234,31 @@ final class Invoice extends Client
                     );
                 }
             }
-            self::validateNfeAddress($recipientAddress);
+            if ($recipientAddress !== null || !$fromClient) {
+                self::validateNfeAddress($recipientAddress);
+            }
             self::validateNfeLatin1($clientName, $items, $recipientAddress);
         }
 
         $abroad = $documentType === DocumentType::NFE && $recipientAddress?->isAbroad();
-        if ($taxId === null && !$abroad) {
+        if ($taxId === null && !$abroad && !$fromClient) {
             throw new InvoiceError(
                 'taxId is required, except for an NF-e to a buyer abroad '
                 . '(recipientAddress state EX)',
             );
         }
 
-        if ($documentType === DocumentType::NFSE) {
+        if ($documentType === DocumentType::NFSE && ($recipientAddress !== null || !$fromClient)) {
             self::validateNfseRetainedAddress($items, $recipientAddress);
         }
 
-        $payload = [
-            'document_type' => $documentType->value,
-            'client_name' => $clientName,
-        ];
+        $payload = ['document_type' => $documentType->value];
+        if ($clientId !== null) {
+            $payload['client_id'] = $clientId;
+        }
+        if ($clientName !== null) {
+            $payload['client_name'] = $clientName;
+        }
         if ($taxId !== null) {
             $payload['tax_id'] = $taxId;
         }
@@ -265,6 +286,7 @@ final class Invoice extends Client
             'referenced_keys' => $referencedKeys === null ? null : array_values($referencedKeys),
             'foreign_id' => $foreignId,
             'export' => $export?->toArray(),
+            'update_client' => $updateClient ? true : null,
         ];
         foreach ($optional as $key => $value) {
             if ($value !== null) {
