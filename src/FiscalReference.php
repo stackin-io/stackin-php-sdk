@@ -48,8 +48,9 @@ final class FiscalReference extends Client
         ?string $baseUrl = null,
         int $timeout = 30,
         string $country = 'BR',
+        ?string $company = null,
     ) {
-        parent::__construct($apiKey, $baseUrl, $timeout, $country);
+        parent::__construct($apiKey, $baseUrl, $timeout, $country, $company);
 
         $this->cfop = $this->kind('cfop');
         $this->ncm = $this->kind('ncm');
@@ -69,13 +70,14 @@ final class FiscalReference extends Client
      *
      * @return list<string>
      */
-    public function kinds(?string $country = null): array
+    public function kinds(?string $country = null, ?string $company = null): array
     {
         $body = $this->send(
             'GET',
             '/fiscal-references/kinds',
             null,
             ['country' => $country ?? $this->country],
+            company: $company,
         );
 
         $decoded = $body !== '' ? json_decode($body, true) : [];
@@ -93,7 +95,13 @@ final class FiscalReference extends Client
     public function kind(string $name, ?string $country = null): Kind
     {
         return new Kind(
-            fn (string $path, array $query): array => $this->request('GET', $path, null, $query),
+            fn (string $path, array $query, ?string $company = null): array => $this->request(
+                'GET',
+                $path,
+                null,
+                $query,
+                company: $company,
+            ),
             $name,
             $country ?? $this->country,
         );
@@ -112,12 +120,14 @@ final class FiscalReference extends Client
         ?string $country = null,
         ?int $limit = null,
         ?int $offset = null,
+        ?string $company = null,
     ): array {
         return $this->request(
             'GET',
             '/fiscal-references',
             null,
             self::searchQuery(null, $country ?? $this->country, $term, $limit, $offset),
+            company: $company,
         );
     }
 
