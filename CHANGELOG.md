@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.16.0 — 2026-11-17
+
+### Features
+- **br:** add IbsCbs group with rate reductions (stackin-io/stackin-api#326)
+
 ## v0.15.0 — 2026-11-16
 
 ### Features
