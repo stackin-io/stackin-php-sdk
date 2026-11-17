@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.15.0 — 2026-11-16
+
+### Features
+- **client:** X-Stackin-Company, companies() and typed company errors (#33)
+
+### Docs
+- **readme:** company selection, companies() and the company errors (#33)
+
+### Tests
+- **client:** company header, companies() and the three company errors (#33)
+
 ## v0.14.0 — 2026-11-15
 
 ### Features
