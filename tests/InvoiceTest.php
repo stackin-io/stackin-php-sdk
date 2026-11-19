@@ -1064,8 +1064,7 @@ final class InvoiceTest extends TestCase
     }
     /**
      * The only method returning bytes. A JSON round trip would corrupt the
-     * document, and the authorizer's endpoint for it is unstable by its own
-     * documentation, so a 502 must stay distinguishable from a bad note.
+     * document, and a failure must still surface as an ApiError.
      */
     public function testPdfReturnsTheBytesUntouched(): void
     {
@@ -1093,24 +1092,22 @@ final class InvoiceTest extends TestCase
         $invoice->pdf('abc123', DocumentType::NFSE);
     }
 
-    public function testPdfSurfacesNotImplementedForNfe(): void
+    public function testPdfReturnsTheDanfeForAnNfe(): void
     {
         $mock = new MockHandler([
-            new Response(501, [], json_encode(['detail' => "a PDF isn't available for nfe yet"])),
+            new Response(200, ['Content-Type' => 'application/pdf'], '%PDF-1.4 danfe'),
         ]);
         $invoice = new Invoice(apiKey: 'secret');
         $this->injectMockHttpClient($invoice, $mock);
 
-        try {
-            $invoice->pdf('abc123', DocumentType::NFE);
-            $this->fail('expected an ApiError');
-        } catch (ApiError $error) {
-            $this->assertSame(501, $error->statusCode);
-        }
+        $bytes = $invoice->pdf(self::NFE_KEY, DocumentType::NFE);
+
+        $this->assertSame('%PDF-1.4 danfe', $bytes);
+        $this->assertSame('document_type=nfe', $mock->getLastRequest()->getUri()->getQuery());
     }
     /**
-     * Reads what the API already collected: the SEFAZ caps how many times a
-     * CNPJ may ask, so a listing must never reach the authorizer.
+     * Reads what the API already collected; collecting is the schedule's
+     * job or syncReceived()'s, so a listing must never reach the authorizer.
      */
     public function testReceivedListsWithoutPagination(): void
     {
