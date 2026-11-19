@@ -4,14 +4,20 @@ declare(strict_types=1);
 
 namespace Stackin;
 
+use DateTimeImmutable;
+use Exception;
 use GuzzleHttp\Client as HttpClient;
 use GuzzleHttp\Exception\GuzzleException;
 use Stackin\Errors\ApiError;
 use Stackin\Errors\ClientAlreadyExistsError;
+use Stackin\Errors\ClientInactiveError;
+use Stackin\Errors\ClientNotFoundError;
 use Stackin\Errors\CompanyNotInScopeError;
 use Stackin\Errors\CompanyRequiredError;
 use Stackin\Errors\ConnectionFailedError;
 use Stackin\Errors\InsufficientPermissionError;
+use Stackin\Errors\PaymentRequiredError;
+use Stackin\Errors\RateLimitedError;
 
 /**
  * Where an api key becomes an HTTP call, for every entry point.
@@ -154,6 +160,9 @@ abstract class Client
             $decoded = $body !== '' ? json_decode($body, true) : [];
             $decoded = is_array($decoded) ? $decoded : [];
             $detail = $decoded['detail'] ?? $body;
+            if ($status === 429) {
+                throw self::rateLimited($detail, $decoded, $response->getHeaderLine('Retry-After'));
+            }
             throw self::apiError($status, $detail);
         }
 
@@ -167,6 +176,9 @@ abstract class Client
     private static function apiError(int $status, mixed $detail): ApiError
     {
         $text = is_string($detail) ? $detail : (string) json_encode($detail);
+        if ($status === 402) {
+            return new PaymentRequiredError($status, $text);
+        }
         if (!is_array($detail)) {
             return new ApiError($status, $text);
         }
@@ -201,6 +213,54 @@ abstract class Client
             );
         }
 
+        $code = $detail['code'] ?? null;
+        $clientId = $detail['client_id'] ?? '';
+        $clientId = is_string($clientId) ? $clientId : '';
+        if ($status === 422 && $code === 'CLIENT_INACTIVE') {
+            return new ClientInactiveError($status, $text, $clientId);
+        }
+        if ($status === 404 && $code === 'CLIENT_NOT_FOUND') {
+            return new ClientNotFoundError($status, $text, $clientId);
+        }
+
         return new ApiError($status, $text);
+    }
+
+    /**
+     * Any 429. code and retry_at are read from the body's top level, or
+     * from detail when the API nests them there; Retry-After from the
+     * header. Each is null when absent or unreadable.
+     *
+     * @param array<array-key, mixed> $body
+     */
+    private static function rateLimited(
+        mixed $detail,
+        array $body,
+        string $retryAfter,
+    ): RateLimitedError {
+        $fields = is_array($detail) ? $detail + $body : $body;
+        $message = $fields['message'] ?? $detail;
+        $text = is_string($message) ? $message : (string) json_encode($detail);
+
+        $code = $fields['code'] ?? null;
+        $retryAt = $fields['retry_at'] ?? null;
+        $seconds = trim($retryAfter);
+
+        return new RateLimitedError(
+            429,
+            $text,
+            ctype_digit($seconds) ? (int) $seconds : null,
+            is_string($retryAt) ? self::moment($retryAt) : null,
+            is_string($code) ? $code : null,
+        );
+    }
+
+    private static function moment(string $value): ?DateTimeImmutable
+    {
+        try {
+            return new DateTimeImmutable($value);
+        } catch (Exception) {
+            return null;
+        }
     }
 }
