@@ -82,6 +82,16 @@ abstract class Client
         return $this->request('GET', '/me/companies');
     }
 
+    /**
+     * What the account has spent this billing period and what it has
+     * left: issued and received documents against the plan's allowance,
+     * the price past it and the credit balance (cents) it is taken from.
+     */
+    public function usage(?string $company = null): Usage
+    {
+        return Usage::fromArray($this->request('GET', '/company/usage', company: $company));
+    }
+
     protected static function resolveBaseUrl(): string
     {
         $envUrl = getenv('STACKIN_BASE_URL');
