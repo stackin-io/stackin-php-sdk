@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.18.0 — 2026-11-18
+
+### Features
+- **invoice:** externalReference and fields filters on history() (#38)
+- **invoice:** syncReceived() for POST /received-invoices/sync (#38)
+- **client:** usage() with a typed Usage model (#38)
+- **errors:** PaymentRequired, RateLimited, ClientInactive and ClientNotFound (#38)
+
+### Docs
+- PDF for NF-e and NFS-e, received sync, pricing, usage and errors (#38)
+
 ## v0.17.0 — 2026-11-17
 
 ### Features
