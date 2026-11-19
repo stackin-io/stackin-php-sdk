@@ -475,6 +475,21 @@ final class Invoice extends Client
     }
 
     /**
+     * Collect received documents from the SEFAZ now, instead of waiting
+     * for the six-hourly schedule.
+     *
+     * After a read that finds nothing more the SEFAZ imposes a one-hour
+     * wait; a sync inside it throws RateLimitedError with code
+     * DISTRIBUTION_COOLDOWN and retryAt set to when it ends.
+     */
+    public function syncReceived(?string $company = null): ReceivedSync
+    {
+        return ReceivedSync::fromArray(
+            $this->request('POST', '/received-invoices/sync', company: $company)
+        );
+    }
+
+    /**
      * What this company issued, newest first.
      *
      * The counterpart of received(): that one lists what was issued
