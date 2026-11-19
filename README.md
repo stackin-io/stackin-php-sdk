@@ -18,7 +18,7 @@
 
 Official PHP SDK for fiscal document issuance — a handful of business fields, nothing about certificates, XML, XSD, signing or SOAP. The API resolves all of that from the issuer's own configuration, identified by `api_key`.
 
-**One class, `Invoice`** — `issue()`/`consult()`/`cancel()`/`reissue()`/`correct()`/`invalidate()`/`pdf()`/`received()`/`manifest()`, nothing else to instantiate. Each line item is a `Br\Product` — `description`/`amount` apply to any document type; `ncm`/`cfop` (plus everything else on `Product`: `cest`, tax groups, presumed credits...) are Brazil-specific and required per item for NFE, ignored for NFSE.
+**One class, `Invoice`** — `issue()`/`consult()`/`cancel()`/`reissue()`/`correct()`/`invalidate()`/`pdf()`/`history()`/`submissions()`/`received()`/`syncReceived()`/`manifest()`, nothing else to instantiate. Each line item is a `Br\Product` — `description`/`amount` apply to any document type; `ncm`/`cfop` (plus everything else on `Product`: `cest`, tax groups, presumed credits...) are Brazil-specific and required per item for NFE, ignored for NFSE.
 
 ## What a line item is worth
 
@@ -91,12 +91,16 @@ $result = $invoice->issue(
 $status = $invoice->consult('ACCESS_KEY...', DocumentType::NFSE);
 $invoice->cancel('ACCESS_KEY...', DocumentType::NFSE, 'Typo');
 
-// The authorizer's PDF, as raw bytes. NFS-e only; the XML stays the
-// legally valid document, and a 502 here means the authorizer is down.
+// The PDF, as raw bytes, drawn by the API itself: the DANFE for an
+// NF-e, the DANFSe for an NFS-e. The XML stays the legally valid document.
 file_put_contents(
     'nota.pdf',
     $invoice->pdf('ACCESS_KEY...', DocumentType::NFSE),
 );
+
+// What this company issued, newest first. externalReference matches
+// your own id exactly; fields: 'summary' returns a lighter item each.
+$page = $invoice->history(externalReference: 'order-1234', fields: 'summary');
 ```
 
 `externalReference` is your own id for the document — an order number, a ticket. It is stored as sent (up to 255 characters), returned on every read and webhook, and left out of the request when not given.
@@ -313,12 +317,26 @@ round trip — and the authorizer checks again for what we can't see from here.
 Everything above serves the **issuer**. These two serve the **recipient**: what
 suppliers billed to this CNPJ, and the formal answer to it.
 
-Reading the list never calls the SEFAZ. The authorizer caps how many times a CNPJ
-may ask for its distribution per day, so collecting runs on a schedule on the API
-side and a page refresh cannot spend that allowance.
+Reading the list never calls the SEFAZ: it returns what the API already collected.
+Collecting runs on a schedule on the API side (every six hours), and
+`syncReceived()` asks for it now. After a read that finds nothing more the SEFAZ
+imposes a one-hour wait; a sync inside it throws `RateLimitedError` with
+`errorCode` `DISTRIBUTION_COOLDOWN` and `retryAt` set to when the wait ends.
+
+The first 50 received documents a month are included in every plan; after that
+R$ 0,05 each is taken from the account credit. Some existing accounts are exempt,
+and `usage()->receivedFree` says whether yours is.
 
 ```php
-use Stackin\\Manifestation;
+use Stackin\Errors\RateLimitedError;
+use Stackin\Manifestation;
+
+try {
+    $sync = $client->syncReceived();
+    echo $sync->stored;
+} catch (RateLimitedError $wait) {
+    echo $wait->retryAt?->format(DATE_ATOM);
+}
 
 $page = $client->received(limit: 20);
 echo $page['total'];
@@ -449,6 +467,20 @@ too. With no company set no header is sent, so the request is exactly what it wa
 `companies()` (`GET /api/v1/me/companies`) lists what the credential reaches and the ids
 `company` accepts.
 
+## Usage and credit
+
+`usage()` (`GET /api/v1/company/usage`, on every client) returns a `Stackin\Usage`:
+the plan, issued documents against its allowance (`includedInvoices`/`usedInvoices`,
+`overagePriceCents` past it, `null` when the plan stops instead), received documents
+(`includedReceived`/`usedReceived`/`receivedPriceCents`/`receivedFree`), the period
+(`currentPeriodStart`/`currentPeriodEnd`, `DateTimeImmutable`), the `creditBalance`
+in cents and `companiesOnAccount`. Fields the API adds later are ignored.
+
+```php
+$usage = $invoice->usage();
+echo "{$usage->usedInvoices}/{$usage->includedInvoices}, credit {$usage->creditBalance}";
+```
+
 ## Errors
 
 - `Stackin\Errors\ApiError` — the API responded with a non-2xx status (`statusCode`/`detail` properties) — a 401 here means `api_key` is missing, wrong, or was rotated.
@@ -457,6 +489,10 @@ too. With no company set no header is sent, so the request is exactly what it wa
   - `Stackin\Errors\CompanyNotInScopeError` — `403`: the named company is not covered. `companies` lists the ones that are.
   - `Stackin\Errors\InsufficientPermissionError` — `403`: the credential reaches the company but lacks this permission there. `description` reads `needs X, has Y, company=<id>`.
 - `Stackin\Errors\ClientAlreadyExistsError` — `409` (an `ApiError`): `Clients::create()` or `update()` with a tax id or foreign id the company already has on another client. `clientId` names that client.
+- `Stackin\Errors\ClientInactiveError` — `422` with code `CLIENT_INACTIVE` (an `ApiError`): `issue()` with the `clientId` of a deactivated client. `clientId` names it; `Clients::reactivate()` brings it back.
+- `Stackin\Errors\ClientNotFoundError` — `404` with code `CLIENT_NOT_FOUND` (an `ApiError`): no saved client with that id. `clientId` echoes it.
+- `Stackin\Errors\PaymentRequiredError` — any `402` (an `ApiError`): the plan's allowance is spent and the credit does not cover the operation. `usage()` shows where the account stands.
+- `Stackin\Errors\RateLimitedError` — any `429` (an `ApiError`): `retryAfter` (seconds, from the `Retry-After` header), `retryAt` (`DateTimeImmutable`) and `errorCode` when the API sends them, e.g. `DISTRIBUTION_COOLDOWN` from `syncReceived()`.
 - `Stackin\Errors\ConnectionFailedError` — the API didn't respond (network/DNS/timeout).
 - `Stackin\Errors\InvoiceError` — a request that would obviously fail server-side, caught before the network call:
   - `issue()` without `clientName` or `taxId` and no `clientId` (`taxId` may be null for an NF-e to a buyer abroad), items is empty, missing `ncm`/`cfop` on an item for NFE, or a missing/incomplete recipient `Address` on NFE (any field but `cityCode`).

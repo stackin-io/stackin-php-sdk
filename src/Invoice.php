@@ -453,8 +453,11 @@ final class Invoice extends Client
      * Documents other companies issued against this one.
      *
      * Reads what the API already collected; it does not call the
-     * authorizer. Collecting runs on a schedule there, because the
-     * SEFAZ caps how many times a CNPJ may ask per day.
+     * authorizer. Collecting runs on a schedule there (every six hours)
+     * and on demand through syncReceived(). The first 50 received a
+     * month are included in every plan, then R$ 0,05 each is taken from
+     * the account credit; usage()->receivedFree says whether this
+     * account is exempt.
      *
      * @return array<string, mixed>
      */
@@ -604,13 +607,12 @@ final class Invoice extends Client
     }
 
     /**
-     * The authorizer's own rendering of an authorized document, as raw
-     * bytes — the only method that does not return a parsed array.
+     * The printable PDF of an authorized document, as raw bytes — the
+     * only method that does not return a parsed array.
      *
-     * The XML is the legally valid document; this is a convenience, and
-     * the authorizer's endpoint for it is unstable, so an ApiError with
-     * status 502 means the authorizer is unavailable, not that the
-     * invoice is wrong. NFS-e only.
+     * The API draws it itself: the DANFE for an NF-e, the DANFSe for an
+     * NFS-e. The XML stays the legally valid document; this is its
+     * human-readable representation.
      */
     public function pdf(
         string $accessKey,
