@@ -1269,4 +1269,31 @@ final class InvoiceTest extends TestCase
 
         $invoice->manifest('abc123', Manifestation::CIENCIA, 'um motivo qualquer');
     }
+
+    public function testHistorySendsExternalReferenceAndFields(): void
+    {
+        $mock = new MockHandler([
+            new Response(200, [], json_encode(['items' => [], 'total' => 0])),
+        ]);
+        $invoice = new Invoice(apiKey: 'secret', baseUrl: 'https://example.com');
+        $this->injectMockHttpClient($invoice, $mock);
+
+        $invoice->history(externalReference: 'order-1234', fields: 'summary');
+
+        parse_str($mock->getLastRequest()->getUri()->getQuery(), $query);
+        $this->assertSame(['external_reference' => 'order-1234', 'fields' => 'summary'], $query);
+    }
+
+    public function testHistoryOmitsTheNewFiltersByDefault(): void
+    {
+        $mock = new MockHandler([
+            new Response(200, [], json_encode(['items' => [], 'total' => 0])),
+        ]);
+        $invoice = new Invoice(apiKey: 'secret', baseUrl: 'https://example.com');
+        $this->injectMockHttpClient($invoice, $mock);
+
+        $invoice->history(limit: 5);
+
+        $this->assertSame('limit=5', $mock->getLastRequest()->getUri()->getQuery());
+    }
 }
