@@ -495,6 +495,9 @@ final class Invoice extends Client
      * The counterpart of received(): that one lists what was issued
      * against the company, this one what the company issued.
      *
+     * $externalReference matches your own id exactly. $fields 'summary'
+     * returns a lighter item per invoice.
+     *
      * @return array<string, mixed>
      */
     public function history(
@@ -505,6 +508,8 @@ final class Invoice extends Client
         ?string $sortBy = null,
         ?string $orderBy = null,
         ?string $company = null,
+        ?string $externalReference = null,
+        ?string $fields = null,
     ): array {
         $query = [];
         if ($documentType !== null) {
@@ -524,6 +529,12 @@ final class Invoice extends Client
         }
         if ($orderBy !== null) {
             $query['order_by'] = $orderBy;
+        }
+        if ($externalReference !== null) {
+            $query['external_reference'] = $externalReference;
+        }
+        if ($fields !== null) {
+            $query['fields'] = $fields;
         }
 
         return $this->request('GET', '/invoices', query: $query, company: $company);
