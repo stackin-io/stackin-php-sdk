@@ -557,7 +557,7 @@ final class Invoice extends Client
     {
         $rows = $this->request(
             'GET',
-            "/invoices/{$invoiceId}/submissions",
+            '/invoices/' . FiscalReference::segment($invoiceId) . '/submissions',
             company: $company,
         );
         if (!array_is_list($rows)) {
