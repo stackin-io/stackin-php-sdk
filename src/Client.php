@@ -22,7 +22,7 @@ use Stackin\Errors\RateLimitedError;
 /**
  * Where an api key becomes an HTTP call, for every entry point.
  *
- * Invoice, Clients, FiscalReference and Taxpayer all extend it, so one
+ * Invoice, Clients, Webhooks, FiscalReference and Taxpayer all extend it, so one
  * constructor configures every client and one code path issues every
  * request. A caller never instantiates this.
  */
@@ -90,6 +90,50 @@ abstract class Client
     public function usage(?string $company = null): Usage
     {
         return Usage::fromArray($this->request('GET', '/company/usage', company: $company));
+    }
+
+    /**
+     * Whether the company can issue right now, and if not, why.
+     *
+     * ready is false with missing naming the cause: certificate,
+     * certificate_expired, certificate_unreadable or address. Also
+     * certificate_expires_at, tax_regime (CRT), state and the
+     * default_series per document type. Ask before a first document
+     * instead of failing it.
+     *
+     * @return array<string, mixed>
+     */
+    public function readiness(?string $company = null): array
+    {
+        return $this->request('GET', '/company', company: $company);
+    }
+
+    /**
+     * The API's pagination query, leaving out what was not passed.
+     *
+     * @return array<string, string>
+     */
+    protected static function pageQuery(
+        ?int $limit,
+        ?int $offset,
+        ?string $sortBy,
+        ?string $orderBy,
+    ): array {
+        $query = [];
+        if ($limit !== null) {
+            $query['limit'] = (string) $limit;
+        }
+        if ($offset !== null) {
+            $query['offset'] = (string) $offset;
+        }
+        if ($sortBy !== null) {
+            $query['sort_by'] = $sortBy;
+        }
+        if ($orderBy !== null) {
+            $query['order_by'] = $orderBy;
+        }
+
+        return $query;
     }
 
     protected static function resolveBaseUrl(): string
