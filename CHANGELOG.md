@@ -1,5 +1,23 @@
 # Changelog
 
+## v0.19.0 — 2026-11-20
+
+### Features
+- **invoice:** stats(), rejection(), classify() and invalidations()
+- **invoice:** contingency on issue()
+- **client:** readiness() on every client
+- **reference:** cities() on FiscalReference
+- **webhooks:** Webhooks client — create, list, delete and deliveries
+
+### Bug Fixes
+- **invoice:** escape invoiceId in the submissions and rejection paths
+
+### Docs
+- **readme:** readiness, rejection, classification, cities, webhooks and contingency
+
+### Tests
+- **invoice:** public routes, contingency and webhooks
+
 ## v0.18.0 — 2026-11-18
 
 ### Features
