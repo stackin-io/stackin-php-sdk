@@ -132,6 +132,45 @@ final class FiscalReference extends Client
     }
 
     /**
+     * Municipalities whose name starts with $name, with their code.
+     *
+     * Each row is {country, code, name, state}; for Brazil code is the
+     * 7-digit IBGE code an address's cityCode takes. Issuing resolves it
+     * from city and state by itself, so this is for the name that
+     * matches more than one. $state narrows to one UF; the API answers
+     * at most 20 rows.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function cities(
+        string $name,
+        ?string $state = null,
+        ?string $country = null,
+        ?string $company = null,
+    ): array {
+        $length = mb_strlen($name);
+        if ($length < 2 || $length > 100) {
+            throw new InvoiceError('name must be 2 to 100 characters');
+        }
+        if ($state !== null && mb_strlen($state) !== 2) {
+            throw new InvoiceError('state must be a two-letter code');
+        }
+
+        $query = ['name' => $name, 'country' => $country ?? $this->country];
+        if ($state !== null) {
+            $query['state'] = strtoupper($state);
+        }
+
+        $rows = $this->request('GET', '/cities', query: $query, company: $company);
+        if (!array_is_list($rows)) {
+            throw new InvoiceError('unexpected response shape: expected a list');
+        }
+
+        /** @var list<array<string, mixed>> $rows */
+        return $rows;
+    }
+
+    /**
      * One path segment, escaped, refusing the ones that would leave it.
      *
      * rawurlencode leaves '.' alone — RFC 3986 calls it unreserved — so

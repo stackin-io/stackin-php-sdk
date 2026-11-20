@@ -186,6 +186,10 @@ final class Invoice extends Client
      * with this request's recipient data. Both are left out of the
      * request when unset.
      *
+     * $contingency true sends an NF-e through the UF's contingency
+     * authorizer (SVC-AN/SVC-RS, tpEmis 6/7) for when its own is down.
+     * Left false, it is not sent.
+     *
      * @param Product[] $items
      * @param string[]|null $referencedKeys
      * @return array<string, mixed>
@@ -210,6 +214,7 @@ final class Invoice extends Client
         ?string $company = null,
         ?string $clientId = null,
         bool $updateClient = false,
+        bool $contingency = false,
     ): array {
         if ($items === []) {
             throw new InvoiceError("items can't be empty");
@@ -287,6 +292,7 @@ final class Invoice extends Client
             'foreign_id' => $foreignId,
             'export' => $export?->toArray(),
             'update_client' => $updateClient ? true : null,
+            'contingency' => $contingency ? true : null,
         ];
         foreach ($optional as $key => $value) {
             if ($value !== null) {
@@ -445,11 +451,6 @@ final class Invoice extends Client
     }
 
     /**
-     * @param array<string, mixed>|null $json
-     * @param array<string, mixed>|null $query
-     * @return array<string, mixed>
-     */
-    /**
      * Documents other companies issued against this one.
      *
      * Reads what the API already collected; it does not call the
@@ -556,7 +557,7 @@ final class Invoice extends Client
     {
         $rows = $this->request(
             'GET',
-            "/invoices/{$invoiceId}/submissions",
+            '/invoices/' . FiscalReference::segment($invoiceId) . '/submissions',
             company: $company,
         );
         if (!array_is_list($rows)) {
@@ -564,6 +565,115 @@ final class Invoice extends Client
         }
 
         return $rows;
+    }
+
+    /**
+     * The numbering ranges this company already invalidated, a page.
+     *
+     * Each row carries the range, the reason, the SEFAZ status and its
+     * protocol. Read it before invalidate() to avoid reporting the same
+     * range twice.
+     *
+     * @return array<string, mixed>
+     */
+    public function invalidations(
+        ?int $limit = null,
+        ?int $offset = null,
+        ?string $sortBy = null,
+        ?string $orderBy = null,
+        ?string $company = null,
+    ): array {
+        return $this->request(
+            'GET',
+            '/invoices/invalidations',
+            query: self::pageQuery($limit, $offset, $sortBy, $orderBy),
+            company: $company,
+        );
+    }
+
+    /**
+     * Why a rejected document was refused, and what to change.
+     *
+     * submissions() has the authorizer's own answer; this reads it for
+     * someone who does not speak SEFAZ: code, message, explanation,
+     * steps, the field to fix and, when there is one, a suggested
+     * value. Takes the invoiceId, like submissions(). A document that
+     * is not rejected is an ApiError 409.
+     *
+     * @return array<string, mixed>
+     */
+    public function rejection(string $invoiceId, ?string $company = null): array
+    {
+        return $this->request(
+            'GET',
+            '/invoices/' . FiscalReference::segment($invoiceId) . '/rejection',
+            company: $company,
+        );
+    }
+
+    /**
+     * A suggested fiscal classification for one item's description.
+     *
+     * A suggestion, never a decision: primary_candidate and
+     * alternative_candidates carry the NCM, CFOP, CST/CSOSN, CEST or
+     * service code, each read from the published tables, with a
+     * confidence, and missing_information lists what would settle it
+     * (pass those back in $answers). Someone confirms it before it goes
+     * on an item; the codes decide the tax owed.
+     *
+     * @param array<string, mixed> $answers
+     * @return array<string, mixed>
+     */
+    public function classify(
+        string $description,
+        DocumentType $documentType,
+        ?string $recipientState = null,
+        array $answers = [],
+        ?string $company = null,
+    ): array {
+        $length = mb_strlen($description);
+        if ($length < 3 || $length > 500) {
+            throw new InvoiceError('description must be 3 to 500 characters');
+        }
+        if ($recipientState !== null && mb_strlen($recipientState) !== 2) {
+            throw new InvoiceError('recipientState must be a two-letter UF');
+        }
+
+        $payload = [
+            'description' => $description,
+            'document_type' => $documentType->value,
+        ];
+        if ($recipientState !== null) {
+            $payload['recipient_state'] = strtoupper($recipientState);
+        }
+        if ($answers !== []) {
+            $payload['answers'] = $answers;
+        }
+
+        return $this->request('POST', '/ai/classify', json: $payload, company: $company);
+    }
+
+    /**
+     * Counts of this company's documents, and the last $days of them.
+     *
+     * total, by_document_type and by_status cover every document;
+     * current_period/previous_period compare the last $days (1 to 365,
+     * the API's default 30) with the ones before, and daily_series has
+     * one row per day.
+     *
+     * @return array<string, mixed>
+     */
+    public function stats(?int $days = null, ?string $company = null): array
+    {
+        $query = [];
+        if ($days !== null) {
+            if ($days < 1 || $days > 365) {
+                throw new InvoiceError('days must be 1 to 365');
+            }
+            $query['days'] = (string) $days;
+        }
+
+        return $this->request('GET', '/invoices/stats', query: $query, company: $company);
     }
 
     /**
