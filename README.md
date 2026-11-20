@@ -168,6 +168,12 @@ $invoice->issue(
 
 Anywhere else a `null` `taxId` throws an `InvoiceError` locally. The SDK checks the types and nothing more: which combinations the SEFAZ accepts — a complementary note without its key, an export leaving from `EX` — is the API's answer, by name.
 
+`contingency` — NF-e only: `true` sends the document through the UF's contingency authorizer (SVC-AN or SVC-RS, `tpEmis` 6/7) for when its own is down. Left `false`, nothing is sent:
+
+```php
+$invoice->issue(DocumentType::NFE, /* ... */, contingency: true);
+```
+
 A fuel sold under a fuel CFOP needs the layout's `comb` group, as a `Fuel` on the item. It goes on the wire under `br.fuel`; passing a `comb` through `extraGroups` as well throws an `InvoiceError`.
 
 ```php
@@ -312,6 +318,52 @@ round trip — and the authorizer checks again for what we can't see from here.
 
 **NF-e only**, and it takes no access key: there is no document to point at.
 
+Ranges already reported are listed, a page at a time, with the SEFAZ `status` and
+`protocol` of each — read it before reporting the same range twice:
+
+```php
+$page = $invoice->invalidations(limit: 20);
+```
+
+## Before the first document, and after a refusal
+
+```php
+$ready = $invoice->readiness();          // GET /company
+if (!$ready['ready']) {
+    print_r($ready['missing']);          // certificate, certificate_expired, certificate_unreadable, address
+}
+
+$why = $invoice->rejection($invoiceId);  // a rejected document, by its local id
+echo $why['code'], $why['explanation'], implode("\n", $why['steps']), $why['suggested'];
+
+$stats = $invoice->stats(days: 7);       // totals, by type and status, this week against the last
+```
+
+`readiness()` (on every client) says whether the company can issue right now and,
+when it cannot, what is missing, plus the certificate's expiry, the tax regime (CRT)
+and the default série per document type. `rejection()` reads the authorizer's answer
+(`submissions()` has it raw) in plain words, with the field to fix and, when there
+is one, a suggested value; a document that is not rejected is an `ApiError` 409.
+`stats()` takes `days` from 1 to 365 (the API's default 30), checked locally.
+
+## Suggesting a classification
+
+```php
+$suggestion = $invoice->classify(
+    'Cerveja artesanal IPA 500ml',
+    DocumentType::NFE,
+    recipientState: 'SP',
+    answers: ['purpose' => 'resale'],    // optional, from missing_information
+);
+$best = $suggestion['primary_candidate']; // ncm, cfop, cst/csosn, cest, confidence
+```
+
+**A suggestion, never a decision.** Every code in a candidate is read from the
+published tables, but the NCM and CFOP decide the tax owed: show it, have someone
+confirm it, and only then put it on an item. `missing_information` lists what
+would settle it; answer through `answers` and ask again. `description` is 3 to
+500 characters, checked locally.
+
 ## Documents issued against you
 
 Everything above serves the **issuer**. These two serve the **recipient**: what
@@ -383,6 +435,12 @@ $ref->search('teclado');                          // every kind at once
 
 `metadata` comes back as the API sends it and differs per kind: `utrib` on an NCM, `ncm_code` on a CEST, `tax_type` on a CST, `null` on an ISS service.
 
+`cities($name, state: null)` lists the municipalities whose name starts with `$name`, at most 20, each with its IBGE `code` — issuing resolves `cityCode` by itself, so this is for a name that matches more than one:
+
+```php
+$ref->cities('santa rita', state: 'SP'); // [['country' => 'BR', 'code' => '...', 'name' => '...', 'state' => 'SP']]
+```
+
 Three things worth knowing before you loop:
 
 - **These share the invoice read allowance** — 600 calls a minute per key, the same bucket `consult()`, `history()`, `received()` and `pdf()` draw from. One `search()` page beats N `get()` calls.
@@ -442,6 +500,32 @@ $clients->reactivate($acme['id']);
   recipient data. Left false, the issuance only counts one more use of it.
 - Reading needs `invoice:read`; creating, editing and deactivating need `invoice:issue`.
   `company` works here as on `Invoice`, on the client or per call.
+
+## Webhooks
+
+`Webhooks` registers where the company's events are delivered: `invoice.authorized`,
+`invoice.rejected`, `invoice.cancelled` and `invoice.corrected` (`Webhooks::EVENTS`).
+An endpoint receives the events of the credential's own environment only.
+
+```php
+use Stackin\Webhooks;
+
+$hooks = new Webhooks(apiKey: '...');
+
+$endpoint = $hooks->create(
+    'https://shop.example/stackin',
+    getenv('STACKIN_WEBHOOK_SECRET'),                 // 16 to 255 characters
+    events: ['invoice.authorized', 'invoice.rejected'], // left out: every event
+);
+$hooks->list();                 // a plain list; secrets are never returned
+$hooks->deliveries(limit: 20);  // every attempt: status, attempts, last_error
+$hooks->delete($endpoint['id']); // stops delivery, keeps the history
+```
+
+The secret signs every delivery and is not returned again, so keep it. An `https://`
+URL, the secret's length and the event names are checked locally; the API also
+refuses a URL that points at a private network. On an OAuth credential every call
+needs `webhook:manage`.
 
 ## One credential, several companies
 
@@ -504,6 +588,8 @@ echo "{$usage->usedInvoices}/{$usage->includedInvoices}, credit {$usage->creditB
   - on NFE, any free-text field (`client_name`, item `description`/`unit`/`purchase_order`/`purchase_order_item`/`observations`, every recipient `Address` field) holding a character the NF-e cannot carry: anything above ISO-8859-1 (U+00FF) — emoji, CJK, Cyrillic… — is refused. Accents, tabs and newlines are fine, and typographic quotes, dashes, ellipsis, bullet, `€` and `™` are converted by the API, so they are let through. NFSE is not checked.
   - an NFSE where any item has `taxRetained: true` (ISSQN retained by the tomador) but the recipient `Address` is missing or lacks any field other than `cityCode`.
   - `correct()` with an access key that is not an NF-e access key (44 characters) — an NFSe has no correction letter; cancel and reissue instead.
+  - `stats()` with `days` outside 1–365, `classify()` with a `description` outside 3–500 characters or a `recipientState` that is not two letters, `FiscalReference::cities()` with a `name` outside 2–100 characters or a `state` that is not two letters, and `Webhooks::create()` with a URL that is not `https://`, a secret outside 16–255 characters or an event name not in `Webhooks::EVENTS`.
+  - `rejection()`, `submissions()` or `Webhooks::delete()` with an id of `.` or `..`, which would leave its path segment.
 
 Building the full fiscal document (issuer data, service code, tax groups, schema-accurate XML) is the API's job — configured once per company, not passed on every call.
 
