@@ -330,7 +330,9 @@ $page = $invoice->invalidations(limit: 20);
 ```php
 $ready = $invoice->readiness();          // GET /company
 if (!$ready['ready']) {
-    print_r($ready['missing']);          // certificate, certificate_expired, certificate_unreadable, address
+    print_r($ready['missing']);          // certificate, certificate_expired, certificate_unreadable, address, state_registration, plan
+    print_r($ready['by_document_type']); // per nfe/nfse: ready, missing (with the fields), warnings
+    echo $ready['fix_url'];              // the dashboard screen for the first blocker
 }
 
 $why = $invoice->rejection($invoiceId);  // a rejected document, by its local id
@@ -340,11 +342,41 @@ $stats = $invoice->stats(days: 7);       // totals, by type and status, this wee
 ```
 
 `readiness()` (on every client) says whether the company can issue right now and,
-when it cannot, what is missing, plus the certificate's expiry, the tax regime (CRT)
-and the default série per document type. `rejection()` reads the authorizer's answer
+when it cannot, what is missing — per document type in `by_document_type`, with
+`fix_url` pointing at the dashboard screen that fixes the first blocker — plus the
+certificate's expiry, the tax regime (CRT), the default série per document type and
+`suggested_fiscal_fields`, what the CNPJ registry suggests (never applied). `rejection()` reads the authorizer's answer
 (`submissions()` has it raw) in plain words, with the field to fix and, when there
 is one, a suggested value; a document that is not rejected is an `ApiError` 409.
 `stats()` takes `days` from 1 to 365 (the API's default 30), checked locally.
+
+### Fix the issuer
+
+```php
+use Stackin\Company;
+
+$company = new Company(apiKey: getenv('STACKIN_API_KEY'));
+$now = $company->update(                 // PATCH /company
+    address: [
+        'street' => 'Av. Paulista',
+        'number' => '1000',
+        'neighborhood' => 'Bela Vista',
+        'municipality_code' => '3550308', // 7-digit IBGE code; the name is filled in
+        'zip_code' => '01310-100',        // sent as 01310100
+    ],
+    fiscalFields: ['tax_regime' => '1'], // the company owner's alone
+);
+var_dump($now['ready']);                  // readiness() fields, plus address and fiscal_fields
+```
+
+`update()` fixes what `readiness()` reports and answers whether the company can issue
+now. `$address` takes `street`, `number`, `neighborhood`, `municipality_code`,
+`municipality_name` and `zip_code` — no `complement`, and `state` changes only in the
+dashboard. `$fiscalFields` takes `tax_regime` (1-4), `simples_nacional` (1-3),
+`simples_apuracao` (1-3), `state_registration` and `service_code`, and anyone but the
+owner gets an `ApiError` 403. Unknown keys and malformed codes are an `InvoiceError`
+before the call; an OAuth credential needs `company:write`. A 503 means the IBGE
+table could not be read: nothing changed, retry after `Retry-After`.
 
 ## Suggesting a classification
 
