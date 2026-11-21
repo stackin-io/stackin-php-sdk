@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.20.0 — 2026-11-21
+
+### Features
+- **company:** update() fixes the issuer address and fiscal fields (stackin-api#554)
+
+### Docs
+- **readme:** Company::update() and the readiness breakdown (stackin-api#554)
+
 ## v0.19.0 — 2026-11-20
 
 ### Features
