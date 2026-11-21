@@ -18,6 +18,7 @@ use Stackin\Errors\ConnectionFailedError;
 use Stackin\Errors\InsufficientPermissionError;
 use Stackin\Errors\PaymentRequiredError;
 use Stackin\Errors\RateLimitedError;
+use stdClass;
 
 /**
  * Where an api key becomes an HTTP call, for every entry point.
@@ -95,11 +96,19 @@ abstract class Client
     /**
      * Whether the company can issue right now, and if not, why.
      *
-     * ready is false with missing naming the cause: certificate,
-     * certificate_expired, certificate_unreadable or address. Also
-     * certificate_expires_at, tax_regime (CRT), state and the
-     * default_series per document type. Ask before a first document
-     * instead of failing it.
+     * ready is true when at least one document type can be issued; when
+     * false, missing names the causes: certificate, certificate_expired,
+     * certificate_unreadable, address, state_registration (NF-e) or
+     * plan. by_document_type breaks it down per nfe/nfse (ready, missing,
+     * warnings; an address issue lists its fields), and fix_url is the
+     * dashboard screen for the first blocker, null when nothing blocks.
+     * Also has_certificate, certificate_expires_at, tax_regime (CRT),
+     * state, the default_series per document type and
+     * suggested_fiscal_fields, what the CNPJ registry suggests where it
+     * differs from what the company holds (never applied). Kept as an
+     * array, so a field the API adds arrives without a release.
+     * Company::update() fixes what it reports. Ask before a first
+     * document instead of failing it.
      *
      * @return array<string, mixed>
      */
@@ -147,14 +156,17 @@ abstract class Client
     }
 
     /**
-     * @param array<string, mixed>|null $json
+     * $json is an array, or a stdClass where an empty body must still go
+     * out as the JSON object {} rather than [].
+     *
+     * @param array<string, mixed>|stdClass|null $json
      * @param array<string, string>|null $query
      * @return array<array-key, mixed>
      */
     protected function request(
         string $method,
         string $path,
-        ?array $json = null,
+        array|stdClass|null $json = null,
         ?array $query = null,
         ?string $idempotencyKey = null,
         ?string $company = null,
@@ -167,13 +179,13 @@ abstract class Client
     }
 
     /**
-     * @param array<string, mixed>|null $json
+     * @param array<string, mixed>|stdClass|null $json
      * @param array<string, string>|null $query
      */
     protected function send(
         string $method,
         string $path,
-        ?array $json = null,
+        array|stdClass|null $json = null,
         ?array $query = null,
         ?string $idempotencyKey = null,
         ?string $company = null,
