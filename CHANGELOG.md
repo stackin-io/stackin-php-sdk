@@ -1,5 +1,20 @@
 # Changelog
 
+## v0.21.0 — 2026-11-22
+
+### Features
+- **items:** create() and upsert(), arrays like Clients, ItemAlreadyExistsError, ITEM_TAX_REGIME_MISMATCH (stackin-api#642)
+- **items:** items catalog resource and item_id on issue (stackin-io/stackin-api#642)
+
+### Bug Fixes
+- **items:** unitPrice takes a decimal string and is sent as one (stackin-api#642)
+
+### Style
+- **items:** wrap two lines over 100 characters
+
+### Chores
+- **gitignore:** block certificate, key and .env files (stackin-io/devops#47)
+
 ## v0.20.0 — 2026-11-21
 
 ### Features
