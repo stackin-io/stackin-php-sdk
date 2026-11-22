@@ -31,7 +31,7 @@ final class Items extends Client
      * lists the active items when $isActive is null; false lists the
      * deactivated ones. $sortBy takes description, code, unit_price,
      * last_used_at, created_at or uses_count. The envelope is returned as
-     * the API sends it; Item::fromArray() reads one of its entries.
+     * the API sends it.
      *
      * @return array<string, mixed>
      */
@@ -66,12 +66,14 @@ final class Items extends Client
 
     /**
      * One item, deactivated or not. Another company's is a 404.
+     *
+     * @return array<string, mixed>
      */
-    public function get(string $itemId, ?string $company = null): Item
+    public function get(string $itemId, ?string $company = null): array
     {
         $escaped = FiscalReference::segment($itemId);
 
-        return Item::fromArray($this->request('GET', "/items/{$escaped}", company: $company));
+        return $this->request('GET', "/items/{$escaped}", company: $company);
     }
 
     /**
@@ -84,7 +86,7 @@ final class Items extends Client
      * item is created.
      *
      * ItemSaved::$created tells the 201 (new) from the 200 (updated). A
-     * $code that belongs to another item is an ItemExistsError.
+     * $code that belongs to another item is an ItemAlreadyExistsError.
      * $issRetained is for a service; $origin needs $taxSituation.
      */
     public function upsert(
@@ -131,7 +133,54 @@ final class Items extends Client
         $decoded = is_array($decoded) ? $decoded : [];
         $data = $decoded['result'] ?? $decoded;
 
-        return new ItemSaved(Item::fromArray(is_array($data) ? $data : []), $status === 201);
+        return new ItemSaved(is_array($data) ? $data : [], $status === 201);
+    }
+
+    /**
+     * Same request as upsert(), answering the item alone. Kept for parity
+     * with Clients::create(); it does not fail on an existing item, it
+     * updates it. Use upsert() when it matters which happened.
+     *
+     * @return array<array-key, mixed>
+     */
+    public function create(
+        string $kind,
+        string $description,
+        ?string $code = null,
+        ?float $unitPrice = null,
+        ?string $unit = null,
+        ?string $source = null,
+        ?string $externalReference = null,
+        ?string $notes = null,
+        ?string $ncm = null,
+        ?string $cfop = null,
+        ?string $taxSituation = null,
+        ?string $origin = null,
+        ?string $cest = null,
+        ?string $gtin = null,
+        ?string $serviceCode = null,
+        ?bool $issRetained = null,
+        ?string $company = null,
+    ): array {
+        return $this->upsert(
+            $kind,
+            $description,
+            $code,
+            $unitPrice,
+            $unit,
+            $source,
+            $externalReference,
+            $notes,
+            $ncm,
+            $cfop,
+            $taxSituation,
+            $origin,
+            $cest,
+            $gtin,
+            $serviceCode,
+            $issRetained,
+            $company,
+        )->item;
     }
 
     /**
@@ -142,18 +191,17 @@ final class Items extends Client
      *
      * The API checks the item as a whole, so turning a product into a
      * service while it still has an ncm is refused (422); taking another
-     * item's code or external_reference is an ItemExistsError.
+     * item's code or external_reference is an ItemAlreadyExistsError.
      *
      * @param array<string, mixed> $changes
+     * @return array<string, mixed>
      */
-    public function update(string $itemId, array $changes, ?string $company = null): Item
+    public function update(string $itemId, array $changes, ?string $company = null): array
     {
         $escaped = FiscalReference::segment($itemId);
         $body = $changes === [] ? new stdClass() : $changes;
 
-        return Item::fromArray(
-            $this->request('PATCH', "/items/{$escaped}", json: $body, company: $company),
-        );
+        return $this->request('PATCH', "/items/{$escaped}", json: $body, company: $company);
     }
 
     /**
@@ -170,8 +218,10 @@ final class Items extends Client
 
     /**
      * Brings a deactivated item back, and returns it.
+     *
+     * @return array<string, mixed>
      */
-    public function reactivate(string $itemId, ?string $company = null): Item
+    public function reactivate(string $itemId, ?string $company = null): array
     {
         return $this->update($itemId, ['is_active' => true], $company);
     }

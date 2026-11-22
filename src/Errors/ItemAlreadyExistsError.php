@@ -9,7 +9,7 @@ namespace Stackin\Errors;
  * this code or external_reference (a deactivated item still holds its
  * code). $itemId names it; $field is `code` or `external_reference`.
  */
-final class ItemExistsError extends ApiError
+final class ItemAlreadyExistsError extends ApiError
 {
     public function __construct(
         int $statusCode,

@@ -17,14 +17,14 @@ use Stackin\Br\Product;
 use Stackin\Client;
 use Stackin\DocumentType;
 use Stackin\Errors\ApiError;
-use Stackin\Errors\ItemExistsError;
+use Stackin\Errors\ItemAlreadyExistsError;
 use Stackin\Errors\ItemInactiveError;
 use Stackin\Errors\ItemKindMismatchError;
 use Stackin\Errors\ItemNotFoundError;
+use Stackin\Errors\ItemTaxRegimeMismatchError;
 use Stackin\Errors\ItemTaxRequiredError;
 use Stackin\Errors\InvoiceError;
 use Stackin\Invoice;
-use Stackin\Item;
 use Stackin\Items;
 
 final class ItemsTest extends TestCase
@@ -188,43 +188,21 @@ final class ItemsTest extends TestCase
         self::assertSame(['items' => [], 'total' => 0], $result);
     }
 
-    public function testGetReturnsATypedItemWithEveryField(): void
+    public function testGetReturnsTheItemAsTheApiSendsIt(): void
     {
         $item = $this->items(self::FULL)->get(self::ITEM_ID);
 
         self::assertSame(self::BASE . '/items/' . self::ITEM_ID, $this->url());
-        self::assertInstanceOf(Item::class, $item);
-        self::assertSame(self::ITEM_ID, $item->id);
-        self::assertSame('product', $item->kind);
-        self::assertSame('Cafe torrado 500g', $item->description);
-        self::assertSame('CAF-500', $item->code);
-        self::assertSame(18.9, $item->unitPrice);
-        self::assertSame('UN', $item->unit);
-        self::assertSame('nuvemshop', $item->source);
-        self::assertSame('ns-variant-1', $item->externalReference);
-        self::assertSame('09012100', $item->ncm);
-        self::assertSame('5102', $item->cfop);
-        self::assertSame('102', $item->taxSituation);
-        self::assertSame('0', $item->origin);
-        self::assertSame('1709600', $item->cest);
-        self::assertSame('7891000315507', $item->gtin);
-        self::assertNull($item->serviceCode);
-        self::assertNull($item->issRetained);
-        self::assertTrue($item->isActive);
-        self::assertSame(3, $item->usesCount);
-        self::assertSame('2026-11-01', $item->lastUsedAt?->format('Y-m-d'));
-        self::assertSame('2026-10-01', $item->createdAt?->format('Y-m-d'));
-        self::assertSame('2026-11-02', $item->updatedAt?->format('Y-m-d'));
-    }
-
-    public function testItemKeepsNullsAndIgnoresUnknownFields(): void
-    {
-        $item = Item::fromArray(['id' => 'x', 'kind' => 'service', 'new_field' => 1,
-            'description' => 'Consultoria', 'iss_retained' => false, 'last_used_at' => null]);
-
-        self::assertNull($item->unitPrice);
-        self::assertNull($item->lastUsedAt);
-        self::assertFalse($item->issRetained);
+        self::assertSame(self::ITEM_ID, $item['id']);
+        self::assertSame('product', $item['kind']);
+        self::assertSame('Cafe torrado 500g', $item['description']);
+        self::assertSame('CAF-500', $item['code']);
+        self::assertSame(18.9, $item['unit_price']);
+        self::assertSame('ns-variant-1', $item['external_reference']);
+        self::assertSame('09012100', $item['ncm']);
+        self::assertNull($item['service_code']);
+        self::assertTrue($item['is_active']);
+        self::assertSame(3, $item['uses_count']);
     }
 
     public function testGetEscapesTheId(): void
@@ -256,7 +234,16 @@ final class ItemsTest extends TestCase
             'iss_retained' => false,
         ], $this->body());
         self::assertTrue($saved->created);
-        self::assertSame(self::ITEM_ID, $saved->item->id);
+        self::assertSame(self::ITEM_ID, $saved->item['id']);
+    }
+
+    public function testCreateAnswersTheItemAlone(): void
+    {
+        $item = $this->items(self::FULL, 201)->create(kind: 'product', description: 'x');
+
+        self::assertSame('POST', $this->request()->getMethod());
+        self::assertSame(self::BASE . '/items', $this->url());
+        self::assertSame(self::ITEM_ID, $item['id']);
     }
 
     public function testUpsertExposesTheUpdateAs200(): void
@@ -264,7 +251,7 @@ final class ItemsTest extends TestCase
         $saved = $this->items(self::FULL, 200)->upsert(kind: 'product', description: 'x');
 
         self::assertFalse($saved->created);
-        self::assertSame('CAF-500', $saved->item->code);
+        self::assertSame('CAF-500', $saved->item['code']);
     }
 
     public function testEveryMethodSendsTheCompanyHeader(): void
@@ -298,7 +285,7 @@ final class ItemsTest extends TestCase
         self::assertSame('PATCH', $this->request()->getMethod());
         self::assertSame(self::BASE . '/items/' . self::ITEM_ID, $this->url());
         self::assertSame(['unit_price' => 20.5, 'notes' => null], $this->body());
-        self::assertSame(self::ITEM_ID, $item->id);
+        self::assertSame(self::ITEM_ID, $item['id']);
     }
 
     public function testUpdateEscapesTheId(): void
@@ -337,7 +324,7 @@ final class ItemsTest extends TestCase
 
         self::assertSame('PATCH', $this->request()->getMethod());
         self::assertSame(['is_active' => true], $this->body());
-        self::assertTrue($item->isActive);
+        self::assertTrue($item['is_active']);
     }
 
     public function testItemExistsNamesTheItemAndField(): void
@@ -346,8 +333,8 @@ final class ItemsTest extends TestCase
             'field' => 'code'];
         try {
             $this->items(['detail' => $detail], 409)->update(self::ITEM_ID, ['code' => 'X']);
-            self::fail('expected ItemExistsError');
-        } catch (ItemExistsError $error) {
+            self::fail('expected ItemAlreadyExistsError');
+        } catch (ItemAlreadyExistsError $error) {
             self::assertInstanceOf(ApiError::class, $error);
             self::assertSame(409, $error->statusCode);
             self::assertSame(self::ITEM_ID, $error->itemId);
@@ -395,6 +382,24 @@ final class ItemsTest extends TestCase
         } catch (ItemTaxRequiredError $error) {
             self::assertNull($error->index);
             self::assertSame(self::ITEM_ID, $error->itemId);
+        }
+    }
+
+    public function testItemTaxRegimeMismatch(): void
+    {
+        $detail = [
+            'code' => 'ITEM_TAX_REGIME_MISMATCH',
+            'message' => 'CSOSN on a CRT 3 company',
+            'item_id' => self::ITEM_ID,
+            'index' => 2,
+        ];
+        try {
+            $this->items(['detail' => $detail], 422)->get(self::ITEM_ID);
+            self::fail('expected ItemTaxRegimeMismatchError');
+        } catch (ItemTaxRegimeMismatchError $error) {
+            self::assertSame(2, $error->index);
+            self::assertSame(self::ITEM_ID, $error->itemId);
+            self::assertSame(422, $error->statusCode);
         }
     }
 

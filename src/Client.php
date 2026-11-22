@@ -12,10 +12,11 @@ use Stackin\Errors\ApiError;
 use Stackin\Errors\ClientAlreadyExistsError;
 use Stackin\Errors\ClientInactiveError;
 use Stackin\Errors\ClientNotFoundError;
-use Stackin\Errors\ItemExistsError;
+use Stackin\Errors\ItemAlreadyExistsError;
 use Stackin\Errors\ItemInactiveError;
 use Stackin\Errors\ItemKindMismatchError;
 use Stackin\Errors\ItemNotFoundError;
+use Stackin\Errors\ItemTaxRegimeMismatchError;
 use Stackin\Errors\ItemTaxRequiredError;
 use Stackin\Errors\CompanyNotInScopeError;
 use Stackin\Errors\CompanyRequiredError;
@@ -318,7 +319,12 @@ abstract class Client
         if ($status === 409 && $code === 'ITEM_EXISTS') {
             $field = $detail['field'] ?? null;
 
-            return new ItemExistsError($status, $text, $itemId, is_string($field) ? $field : null);
+            return new ItemAlreadyExistsError(
+                $status,
+                $text,
+                $itemId,
+                is_string($field) ? $field : null,
+            );
         }
         if ($status === 404 && $code === 'ITEM_NOT_FOUND') {
             return new ItemNotFoundError($status, $text, $itemId);
@@ -330,6 +336,16 @@ abstract class Client
             $index = $detail['index'] ?? null;
 
             return new ItemKindMismatchError(
+                $status,
+                $text,
+                $itemId,
+                is_int($index) ? $index : null,
+            );
+        }
+        if ($status === 422 && $code === 'ITEM_TAX_REGIME_MISMATCH') {
+            $index = $detail['index'] ?? null;
+
+            return new ItemTaxRegimeMismatchError(
                 $status,
                 $text,
                 $itemId,
