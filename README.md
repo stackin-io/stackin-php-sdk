@@ -530,6 +530,12 @@ $clients->reactivate($acme['id']);
   there (422) until it is reactivated.
 - `updateClient: true` on `issue()` rewrites an existing client with that request's
   recipient data. Left false, the issuance only counts one more use of it.
+- `clientEmail` and `clientPhone` on `issue()` are contact data for the client, never
+  written into the fiscal document (a reissue does not touch the client). The e-mail must
+  be valid; the phone is 8 to 15 digits with an optional leading `+` (the API drops spaces,
+  dots, dashes and parentheses). They are saved on the client created after a successful
+  issuance, and on an existing one only with `updateClient: true`, and only the ones sent.
+  Left out of the request when null.
 - Reading needs `invoice:read`; creating, editing and deactivating need `invoice:issue`.
   `company` works here as on `Invoice`, on the client or per call.
 
