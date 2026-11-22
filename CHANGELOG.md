@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.23.0 — 2026-11-22
+
+### Features
+- **reference:** calculateIbsCbs with typed results
+- **company:** simples_apuracao_ibs_cbs fiscal field
+- **ibs-cbs:** optional rates and operation_indicator on the item group
+
+### Docs
+- **readme:** IBS/CBS simulation and the NFS-e ibs_cbs shape
+- **issue:** client_id also fills the recipient's e-mail and phone
+
 ## v0.22.1 — 2026-11-22
 
 ### Docs
