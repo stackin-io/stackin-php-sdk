@@ -103,6 +103,18 @@ final class CompanyUpdateTest extends TestCase
         ], json_decode((string) $request->getBody(), true));
     }
 
+    public function testTheIbsCbsApuracaoIsSentAsGiven(): void
+    {
+        $this->company(self::json([]))->update(
+            fiscalFields: ['simples_apuracao_ibs_cbs' => '3'],
+        );
+
+        $this->assertSame(
+            ['fiscal_fields' => ['simples_apuracao_ibs_cbs' => '3']],
+            json_decode((string) $this->request()->getBody(), true),
+        );
+    }
+
     public function testTheZipMaskIsStrippedAndNullsLeftOut(): void
     {
         $this->company(self::json([]))->update(
@@ -171,6 +183,11 @@ final class CompanyUpdateTest extends TestCase
             'tax_regime 5' => [null, ['tax_regime' => '5'], 'tax_regime'],
             'simples_nacional 4' => [null, ['simples_nacional' => '4'], 'simples_nacional'],
             'simples_apuracao 0' => [null, ['simples_apuracao' => '0'], 'simples_apuracao'],
+            'simples_apuracao_ibs_cbs 2' => [
+                null,
+                ['simples_apuracao_ibs_cbs' => '2'],
+                'simples_apuracao_ibs_cbs',
+            ],
         ];
     }
 
