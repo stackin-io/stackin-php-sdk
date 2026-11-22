@@ -25,15 +25,22 @@ use Stackin\Errors\InvoiceError;
  * one way to send that group: `extraGroups` carrying a `comb` (or a
  * `fuel`) next to it is refused.
  *
+ * `itemId` names an item of the company's catalog (see Items): it fills
+ * whatever the line leaves out (description, unit price, unit, barcode,
+ * ncm, cfop, cest, tax, service code, ISS retention), and what the line
+ * sends wins (`unit` and `taxRetained` default to `UN` and false only
+ * without it). With it `description` is optional, and the NF-e's ncm and
+ * cfop are not required here: the API checks the filled line.
+ *
  * `ibsCbs` is the IBS/CBS group, sent under `br.ibs_cbs`: an `IbsCbs`, or
  * the same keys as a plain array.
  */
 final class Product
 {
     public function __construct(
-        public readonly string $description,
+        public readonly ?string $description = null,
         public readonly ?float $amount = null,
-        public readonly string $unit = 'UN',
+        public readonly ?string $unit = null,
         public readonly float $quantity = 1.0,
         public readonly ?string $barcode = null,
         public readonly ?float $freight = null,
@@ -62,13 +69,17 @@ final class Product
         public readonly ?array $tax = null,
         public readonly ?string $serviceCode = null,
         public readonly ?float $serviceDiscount = null,
-        public readonly bool $taxRetained = false,
+        public readonly ?bool $taxRetained = null,
         public readonly ?string $observations = null,
         public readonly ?float $unitPrice = null,
         /** @var IbsCbs|array<string, mixed>|null */
         public readonly IbsCbs|array|null $ibsCbs = null,
         public readonly ?Fuel $fuel = null,
+        public readonly ?string $itemId = null,
     ) {
+        if ($description === null && $itemId === null) {
+            throw new InvoiceError('description is required unless itemId is given');
+        }
         if ($fuel !== null && $extraGroups !== null && self::carriesFuelGroup($extraGroups)) {
             throw new InvoiceError('send the fuel group once: fuel or extraGroups comb');
         }
@@ -149,6 +160,27 @@ final class Product
         return (10 - $sum % 10) % 10 === (int) substr($gtin, -1);
     }
 
+    /**
+     * A price as the wire takes it: a float through the same decimal
+     * writer the issue lines use, a string checked to be a plain decimal
+     * (up to 10 places, the vUnCom precision) and sent as it is, so no
+     * digit rounds on the way.
+     */
+    public static function priceString(float|string $value): string
+    {
+        if (is_float($value)) {
+            return (string) self::decimalString($value);
+        }
+        $text = trim($value);
+        if (preg_match('/^\d+(\.\d{1,10})?$/', $text) !== 1) {
+            throw new InvoiceError(
+                'unitPrice must be a decimal with at most 10 places, such as 18.90'
+            );
+        }
+
+        return $text;
+    }
+
     private static function decimalString(?float $value): ?string
     {
         return $value === null ? null : rtrim(rtrim(number_format($value, 10, '.', ''), '0'), '.');
@@ -163,7 +195,7 @@ final class Product
     {
         $data = array_filter(
             [
-                'unit' => $this->unit,
+                'unit' => $this->unit ?? ($this->itemId === null ? 'UN' : null),
                 'quantity' => $this->quantity,
                 'used_movable_asset' => $this->usedMovableAsset,
                 'barcode' => $this->barcode,
@@ -209,6 +241,7 @@ final class Product
 
         $result = array_filter(
             [
+                'item_id' => $this->itemId,
                 'description' => $this->description,
                 'amount' => self::decimalString($this->amount),
                 'unit_price' => self::decimalString($this->unitPrice),
@@ -219,7 +252,10 @@ final class Product
             ],
             static fn (mixed $value): bool => $value !== null,
         );
-        $result['tax_retained'] = $this->taxRetained;
+        // Left unset on a catalog line, so the item's iss_retained applies.
+        if ($this->taxRetained !== null || $this->itemId === null) {
+            $result['tax_retained'] = $this->taxRetained ?? false;
+        }
 
         return $result;
     }

@@ -46,7 +46,10 @@ final class Invoice extends Client
      */
     private static function validateNfseRetainedAddress(array $items, ?Address $address): void
     {
-        $retained = array_filter($items, static fn (Product $item): bool => $item->taxRetained);
+        $retained = array_filter(
+            $items,
+            static fn (Product $item): bool => $item->taxRetained === true,
+        );
         if ($retained === []) {
             return;
         }
@@ -227,13 +230,13 @@ final class Invoice extends Client
 
         if ($documentType === DocumentType::NFE) {
             foreach ($items as $index => $item) {
-                if (!$item->ncm) {
+                if ($item->itemId === null && !$item->ncm) {
                     throw new InvoiceError("items[{$index}].ncm is required for NFE");
                 }
-                if (!$item->cfop) {
+                if ($item->itemId === null && !$item->cfop) {
                     throw new InvoiceError("items[{$index}].cfop is required for NFE");
                 }
-                if (mb_strlen($item->description) > 120) {
+                if ($item->description !== null && mb_strlen($item->description) > 120) {
                     throw new InvoiceError(
                         "items[{$index}].description exceeds 120 characters (NF-e xProd limit)",
                     );
