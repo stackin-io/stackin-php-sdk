@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.22.0 — 2026-11-22
+
+### Features
+- add clientEmail and clientPhone to issue()
+
+### Docs
+- document clientEmail and clientPhone
+
+### Tests
+- cover client contact fields on issue()
+
 ## v0.21.0 — 2026-11-22
 
 ### Features
