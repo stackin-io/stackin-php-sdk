@@ -33,6 +33,7 @@ final class Company extends Client
         'tax_regime',
         'simples_nacional',
         'simples_apuracao',
+        'simples_apuracao_ibs_cbs',
         'state_registration',
         'service_code',
     ];
@@ -42,6 +43,7 @@ final class Company extends Client
         'tax_regime' => ['1', '2', '3', '4'],
         'simples_nacional' => ['1', '2', '3'],
         'simples_apuracao' => ['1', '2', '3'],
+        'simples_apuracao_ibs_cbs' => ['1', '3'],
     ];
 
     /**
@@ -52,7 +54,8 @@ final class Company extends Client
      * 7-digit IBGE code of a city in the company's state), municipality_name
      * (derived from the code when left out) and zip_code (8 digits, a mask
      * accepted). $fiscalFields takes tax_regime (CRT 1-4), simples_nacional
-     * (1-3), simples_apuracao (1-3), state_registration and service_code;
+     * (1-3), simples_apuracao (1-3), simples_apuracao_ibs_cbs (1 or 3),
+     * state_registration and service_code;
      * anyone but the owner is refused with an ApiError 403. Any other key is
      * refused here, before the call. Null values are left out, and a call
      * with nothing changes nothing and answers the company as it is.

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Stackin;
 
+use DateTimeImmutable;
 use Stackin\Errors\InvoiceError;
 
 /**
@@ -168,6 +169,64 @@ final class FiscalReference extends Client
 
         /** @var list<array<string, mixed>> $rows */
         return $rows;
+    }
+
+    /**
+     * Simulates the IBS and CBS of the items, with no document issued or
+     * stored (POST /ibs-cbs/calculate).
+     *
+     * $items is a list of IbsCbsCalculationItem, or arrays with the same
+     * snake_case keys: cst, classification, amount and/or base, the three
+     * rates and the two reductions. $operationDate is YYYY-MM-DD.
+     * $documentType (nfe, nfce or nfse) only picks the model the cClassTrib
+     * is checked for. $rates are the defaults for items that carry none:
+     * left out in 2026 the official 2026 rates apply, in any other year
+     * the API refuses with 422 IBS_CBS_RATES_REQUIRED. 1 to 990 items;
+     * the rest is checked by the API.
+     *
+     * @param list<IbsCbsCalculationItem|array<string, mixed>> $items
+     * @param IbsCbsRates|array<string, mixed>|null $rates
+     */
+    public function calculateIbsCbs(
+        array $items,
+        string $operationDate,
+        string $documentType = 'nfe',
+        IbsCbsRates|array|null $rates = null,
+        ?string $company = null,
+    ): IbsCbsCalculation {
+        if ($items === [] || count($items) > 990) {
+            throw new InvoiceError('items must have 1 to 990 entries');
+        }
+        if (!in_array($documentType, ['nfe', 'nfce', 'nfse'], true)) {
+            throw new InvoiceError('documentType must be nfe, nfce or nfse');
+        }
+        $date = DateTimeImmutable::createFromFormat('!Y-m-d', $operationDate);
+        if ($date === false || $date->format('Y-m-d') !== $operationDate) {
+            throw new InvoiceError('operationDate must be a YYYY-MM-DD date');
+        }
+
+        $body = [
+            'document_type' => $documentType,
+            'operation_date' => $operationDate,
+            'items' => array_map(
+                static fn (IbsCbsCalculationItem|array $item): array => (
+                    $item instanceof IbsCbsCalculationItem
+                        ? $item
+                        : IbsCbsCalculationItem::fromArray($item)
+                )->toArray(),
+                array_values($items),
+            ),
+        ];
+        if ($rates !== null) {
+            $rates = $rates instanceof IbsCbsRates ? $rates : IbsCbsRates::fromArray($rates);
+            if ($rates->toArray() !== []) {
+                $body['rates'] = $rates->toArray();
+            }
+        }
+
+        return IbsCbsCalculation::fromArray(
+            $this->request('POST', '/ibs-cbs/calculate', json: $body, company: $company),
+        );
     }
 
     /**

@@ -327,6 +327,35 @@ final class ProductTest extends TestCase
         $this->assertSame(0.0, $group['reduction_cbs']);
     }
 
+    public function testIbsCbsNfseShapeCarriesNoRates(): void
+    {
+        $product = new Product(
+            description: 'Consultoria',
+            unitPrice: 100.00,
+            ibsCbs: new IbsCbs(
+                cst: '000',
+                classification: '000001',
+                operationIndicator: '100301',
+            ),
+        );
+
+        $this->assertSame(
+            [
+                'cst' => '000',
+                'classification' => '000001',
+                'operation_indicator' => '100301',
+            ],
+            $product->toArray()['product']['br']['ibs_cbs'],
+        );
+    }
+
+    public function testIbsCbsRefusesAMalformedOperationIndicator(): void
+    {
+        $this->expectException(InvoiceError::class);
+
+        new IbsCbs(cst: '000', classification: '000001', operationIndicator: '1003');
+    }
+
     public function testIbsCbsAsAnArrayIsSentUnchanged(): void
     {
         $group = [
