@@ -12,6 +12,11 @@ use Stackin\Errors\ApiError;
 use Stackin\Errors\ClientAlreadyExistsError;
 use Stackin\Errors\ClientInactiveError;
 use Stackin\Errors\ClientNotFoundError;
+use Stackin\Errors\ItemExistsError;
+use Stackin\Errors\ItemInactiveError;
+use Stackin\Errors\ItemKindMismatchError;
+use Stackin\Errors\ItemNotFoundError;
+use Stackin\Errors\ItemTaxRequiredError;
 use Stackin\Errors\CompanyNotInScopeError;
 use Stackin\Errors\CompanyRequiredError;
 use Stackin\Errors\ConnectionFailedError;
@@ -23,7 +28,7 @@ use stdClass;
 /**
  * Where an api key becomes an HTTP call, for every entry point.
  *
- * Invoice, Clients, Webhooks, FiscalReference and Taxpayer all extend it, so one
+ * Invoice, Clients, Items, Webhooks, FiscalReference and Taxpayer all extend it, so one
  * constructor configures every client and one code path issues every
  * request. A caller never instantiates this.
  */
@@ -190,6 +195,25 @@ abstract class Client
         ?string $idempotencyKey = null,
         ?string $company = null,
     ): string {
+        return $this->sendWithStatus($method, $path, $json, $query, $idempotencyKey, $company)[1];
+    }
+
+    /**
+     * Same as send(), keeping the status code for the routes whose 2xx
+     * says something (the item upsert: 201 created, 200 updated).
+     *
+     * @param array<string, mixed>|stdClass|null $json
+     * @param array<string, string>|null $query
+     * @return array{int, string}
+     */
+    protected function sendWithStatus(
+        string $method,
+        string $path,
+        array|stdClass|null $json = null,
+        ?array $query = null,
+        ?string $idempotencyKey = null,
+        ?string $company = null,
+    ): array {
         $url = "{$this->baseUrl}/api/v1{$path}";
         $options = [];
         if ($json !== null) {
@@ -232,7 +256,7 @@ abstract class Client
             throw self::apiError($status, $detail);
         }
 
-        return $body;
+        return [$status, $body];
     }
 
     /**
@@ -287,6 +311,40 @@ abstract class Client
         }
         if ($status === 404 && $code === 'CLIENT_NOT_FOUND') {
             return new ClientNotFoundError($status, $text, $clientId);
+        }
+
+        $itemId = $detail['item_id'] ?? '';
+        $itemId = is_string($itemId) ? $itemId : '';
+        if ($status === 409 && $code === 'ITEM_EXISTS') {
+            $field = $detail['field'] ?? null;
+
+            return new ItemExistsError($status, $text, $itemId, is_string($field) ? $field : null);
+        }
+        if ($status === 404 && $code === 'ITEM_NOT_FOUND') {
+            return new ItemNotFoundError($status, $text, $itemId);
+        }
+        if ($status === 422 && $code === 'ITEM_INACTIVE') {
+            return new ItemInactiveError($status, $text, $itemId);
+        }
+        if ($status === 422 && $code === 'ITEM_KIND_MISMATCH') {
+            $index = $detail['index'] ?? null;
+
+            return new ItemKindMismatchError(
+                $status,
+                $text,
+                $itemId,
+                is_int($index) ? $index : null,
+            );
+        }
+        if ($status === 422 && $code === 'ITEM_TAX_REQUIRED') {
+            $index = $detail['index'] ?? null;
+
+            return new ItemTaxRequiredError(
+                $status,
+                $text,
+                $itemId,
+                is_int($index) ? $index : null,
+            );
         }
 
         return new ApiError($status, $text);

@@ -597,6 +597,72 @@ $usage = $invoice->usage();
 echo "{$usage->usedInvoices}/{$usage->includedInvoices}, credit {$usage->creditBalance}";
 ```
 
+## Catalog items
+
+The company keeps the products and services it sells. `Items` reads and edits that
+catalog, and a line of `issue()` names an entry with `itemId` to be filled from it.
+An item is a `product` (NF-e) or a `service` (NFS-e); a fiscal field of the other kind
+is refused (422). Nothing fiscal is required to save one: an NF-e still refuses a line
+without `ncm`/`cfop` when it is issued.
+
+```php
+use Stackin\Br\Product;
+use Stackin\Items;
+use Stackin\Errors\ItemExistsError;
+
+$items = new Items(apiKey: '...');
+
+$items->list(kind: 'product', search: 'cafe', limit: 20);   // active ones, by description
+$items->list(isActive: false);                              // the deactivated ones
+
+// Upsert: the same externalReference (or code) updates instead of duplicating.
+$saved = $items->upsert(
+    kind: 'product',
+    description: 'Cafe torrado 500g',
+    code: 'CAF-500',
+    unitPrice: 18.9,
+    ncm: '09012100',
+    cfop: '5102',
+    externalReference: 'ns-variant-1',
+);
+$saved->created;                                            // true = 201, false = 200
+$item = $saved->item;                                       // an Item, typed
+
+$items->get($item->id);
+$items->update($item->id, ['unit_price' => 20.5, 'notes' => null]); // null clears
+$items->deactivate($item->id);                              // kept, hidden from list()
+$items->reactivate($item->id);
+
+(new Invoice(apiKey: '...'))->issue(
+    documentType: DocumentType::NFE,
+    clientName: 'ACME Ltda',
+    taxId: '11222333000181',
+    items: [new Product(itemId: $item->id, amount: 18.9)],  // no description needed
+    recipientAddress: $address,
+);
+```
+
+- `upsert()` sends only the arguments that are not null. It updates the company's item
+  with the same `externalReference`, or the same `code` when none is sent; the item
+  keeps its `source` and active state. `ItemSaved::$created` tells the 201 from the 200.
+  A `code` that belongs to another item is an `ItemExistsError`.
+- `list()` filters by `kind`, `search` (description, code, external reference; digits
+  also match `ncm` and `gtin`), `source` (`manual`, `import`, `nuvemshop`, `invoice`)
+  and `isActive`, and pages with `limit`/`offset`. `sortBy` takes `description`, `code`,
+  `unit_price`, `last_used_at`, `created_at` or `uses_count`. It returns the API's
+  envelope; `Item::fromArray()` reads an entry.
+- `update()` takes the changes keyed by their API names and sends only those. The API
+  checks the item as a whole, so turning a product into a service that still has an
+  `ncm` is refused.
+- On `issue()`, `Product(itemId: ...)` is filled from the catalog with whatever the line
+  leaves out (description, unit price, `unit`, `barcode`, `ncm`, `cfop`, `cest`, `tax`,
+  service code, `taxRetained`); what the line sends wins. With `itemId`, `description`
+  is optional, and `unit` and `taxRetained` are no longer defaulted to `UN` and false, so
+  the catalog's apply. A deactivated item is refused (422 `ItemInactiveError`), as is a
+  service on an NF-e or a product on an NFS-e (`ItemKindMismatchError`). A catalog tax
+  situation that needs a base and a rate (CST 00, CSOSN 101/500/900...) needs the line's
+  own `tax` (`ItemTaxRequiredError`).
+
 ## Errors
 
 - `Stackin\Errors\ApiError` — the API responded with a non-2xx status (`statusCode`/`detail` properties) — a 401 here means `api_key` is missing, wrong, or was rotated.
@@ -607,11 +673,17 @@ echo "{$usage->usedInvoices}/{$usage->includedInvoices}, credit {$usage->creditB
 - `Stackin\Errors\ClientAlreadyExistsError` — `409` (an `ApiError`): `Clients::create()` or `update()` with a tax id or foreign id the company already has on another client. `clientId` names that client.
 - `Stackin\Errors\ClientInactiveError` — `422` with code `CLIENT_INACTIVE` (an `ApiError`): `issue()` with the `clientId` of a deactivated client. `clientId` names it; `Clients::reactivate()` brings it back.
 - `Stackin\Errors\ClientNotFoundError` — `404` with code `CLIENT_NOT_FOUND` (an `ApiError`): no saved client with that id. `clientId` echoes it.
+- The catalog refusals are `ApiError`s too, each with `itemId`:
+  - `Stackin\Errors\ItemExistsError` — `409` `ITEM_EXISTS`: a `code` or `externalReference` the company already has on another item (a deactivated item still holds its code). `field` is `code` or `external_reference`.
+  - `Stackin\Errors\ItemNotFoundError` — `404` `ITEM_NOT_FOUND`: no item of this company with that id.
+  - `Stackin\Errors\ItemInactiveError` — `422` `ITEM_INACTIVE`: `issue()` with a deactivated item; `Items::reactivate()` brings it back.
+  - `Stackin\Errors\ItemKindMismatchError` — `422` `ITEM_KIND_MISMATCH`: a service on an NF-e or a product on an NFS-e. `index` is the line.
+  - `Stackin\Errors\ItemTaxRequiredError` — `422` `ITEM_TAX_REQUIRED`: the line must send its own `tax`.
 - `Stackin\Errors\PaymentRequiredError` — any `402` (an `ApiError`): the plan's allowance is spent and the credit does not cover the operation. `usage()` shows where the account stands.
 - `Stackin\Errors\RateLimitedError` — any `429` (an `ApiError`): `retryAfter` (seconds, from the `Retry-After` header), `retryAt` (`DateTimeImmutable`) and `errorCode` when the API sends them, e.g. `DISTRIBUTION_COOLDOWN` from `syncReceived()`.
 - `Stackin\Errors\ConnectionFailedError` — the API didn't respond (network/DNS/timeout).
 - `Stackin\Errors\InvoiceError` — a request that would obviously fail server-side, caught before the network call:
-  - `issue()` without `clientName` or `taxId` and no `clientId` (`taxId` may be null for an NF-e to a buyer abroad), items is empty, missing `ncm`/`cfop` on an item for NFE, or a missing/incomplete recipient `Address` on NFE (any field but `cityCode`).
+  - `issue()` without `clientName` or `taxId` and no `clientId` (`taxId` may be null for an NF-e to a buyer abroad), items is empty, missing `ncm`/`cfop` on an item for NFE, or a missing/incomplete recipient `Address` on NFE (any field but `cityCode`). A `Product` with neither `description` nor `itemId` is refused too, and `ncm`/`cfop` are not required locally on a line with an `itemId`.
   - a `Product` built with an `ncm` that is not the full 8 digits, or `00` for a service line — SEFAZ rejects any other 2-digit chapter with `777`.
   - a `Product` built with a `barcode` (cEAN) that is neither `SEM GTIN` nor 8, 12, 13 or 14 digits, or whose GS1 check digit is wrong.
   - a `Product` built with a `recopiNumber` that is not the 20-digit RECOPI number; the SDK checks its two modulo-11 check digits (MOC §8.5) before sending.
