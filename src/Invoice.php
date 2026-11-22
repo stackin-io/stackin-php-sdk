@@ -189,6 +189,15 @@ final class Invoice extends Client
      * with this request's recipient data. Both are left out of the
      * request when unset.
      *
+     * $clientEmail and $clientPhone are contact data for the Stackin client,
+     * not for the fiscal document: they are never written into it, and a
+     * reissue does not touch the client. $clientEmail must be a valid
+     * e-mail; $clientPhone is 8 to 15 digits with an optional leading +
+     * (the API drops spaces, dots, dashes and parentheses). They are saved
+     * on the client created after a successful issuance, and on an
+     * existing one only with $updateClient true, and only the ones sent.
+     * Left out of the request when null.
+     *
      * $contingency true sends an NF-e through the UF's contingency
      * authorizer (SVC-AN/SVC-RS, tpEmis 6/7) for when its own is down.
      * Left false, it is not sent.
@@ -218,6 +227,8 @@ final class Invoice extends Client
         ?string $clientId = null,
         bool $updateClient = false,
         bool $contingency = false,
+        ?string $clientEmail = null,
+        ?string $clientPhone = null,
     ): array {
         if ($items === []) {
             throw new InvoiceError("items can't be empty");
@@ -296,6 +307,8 @@ final class Invoice extends Client
             'export' => $export?->toArray(),
             'update_client' => $updateClient ? true : null,
             'contingency' => $contingency ? true : null,
+            'client_email' => $clientEmail,
+            'client_phone' => $clientPhone,
         ];
         foreach ($optional as $key => $value) {
             if ($value !== null) {
