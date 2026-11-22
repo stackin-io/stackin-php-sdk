@@ -427,6 +427,36 @@ final class ClientsTest extends TestCase
         self::assertArrayNotHasKey('update_client', $this->body());
     }
 
+    public function testIssueSendsClientContactWhenGiven(): void
+    {
+        $this->invoice()->issue(
+            documentType: DocumentType::NFE,
+            clientName: null,
+            taxId: null,
+            items: [self::nfeItem()],
+            clientId: self::CLIENT_ID,
+            updateClient: true,
+            clientEmail: 'ana@example.com',
+            clientPhone: '+55 (48) 99999-0000',
+        );
+        $body = $this->body();
+        self::assertSame('ana@example.com', $body['client_email']);
+        self::assertSame('+55 (48) 99999-0000', $body['client_phone']);
+    }
+
+    public function testIssueOmitsClientContactByDefault(): void
+    {
+        $this->invoice()->issue(
+            documentType: DocumentType::NFE,
+            clientName: null,
+            taxId: null,
+            items: [self::nfeItem()],
+            clientId: self::CLIENT_ID,
+        );
+        self::assertArrayNotHasKey('client_email', $this->body());
+        self::assertArrayNotHasKey('client_phone', $this->body());
+    }
+
     public function testWithoutClientIdClientNameIsStillRequired(): void
     {
         $this->expectException(InvoiceError::class);
