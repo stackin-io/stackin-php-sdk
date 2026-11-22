@@ -197,7 +197,13 @@ new Product(
 
 `Fuel` also takes `glpPercent`, `naturalGasNationalPercent`, `naturalGasImportedPercent` and `startingValue` (GLP only), `codif` and `temperatureQuantity`.
 
-An item's IBS/CBS group (Reforma Tributária) is an `IbsCbs` on the item, sent under `br.ibs_cbs`: `cst`, `classification` (cClassTrib), `rateState`, `rateCity` and `rateFederal`, plus `base`, `reductionIbs` and `reductionCbs`, which are left off the request when null. `reductionIbs` is the IBS pRedAliq (state and municipality) and `reductionCbs` the CBS pRedAliq, both in percent (0–100): the cClassTrib's `pRedIBS` and `pRedCBS` in the official classification table. The API asks for them on CST 011, 200 and 515 and refuses them on any other; the SDK leaves that rule to the API. A plain array with the same snake_case keys is still accepted and sent as given.
+An item's IBS/CBS group (Reforma Tributária) is an `IbsCbs` on the item, sent under `br.ibs_cbs`: `cst`, `classification` (cClassTrib), `rateState`, `rateCity` and `rateFederal`, plus `base`, `reductionIbs`, `reductionCbs` and `operationIndicator` (cIndOp, 6 digits). Every field but `cst` and `classification` is optional and left off the request when null. `reductionIbs` is the IBS pRedAliq (state and municipality) and `reductionCbs` the CBS pRedAliq, both in percent (0–100): the cClassTrib's `pRedIBS` and `pRedCBS` in the official classification table. The API asks for them on CST 011, 200 and 515 and refuses them on any other; the SDK leaves that rule to the API. A plain array with the same snake_case keys is still accepted and sent as given.
+
+On an NF-e send the three rates (and, if you need them, `base` and the reductions). On an NFS-e send only `cst`, `classification` and `operationIndicator`, which the API requires on a production NFS-e; which of the fields a document type needs is decided by the API, not checked here. A microempreendedor or EPP also needs `simples_apuracao_ibs_cbs` `3` on the company for the NFS-e group (see `Company::update()`).
+
+```php
+new IbsCbs(cst: '000', classification: '000001', operationIndicator: '100301');
+```
 
 ```php
 use Stackin\Br\IbsCbs;
@@ -373,7 +379,8 @@ var_dump($now['ready']);                  // readiness() fields, plus address an
 now. `$address` takes `street`, `number`, `neighborhood`, `municipality_code`,
 `municipality_name` and `zip_code` — no `complement`, and `state` changes only in the
 dashboard. `$fiscalFields` takes `tax_regime` (1-4), `simples_nacional` (1-3),
-`simples_apuracao` (1-3), `state_registration` and `service_code`, and anyone but the
+`simples_apuracao` (1-3), `simples_apuracao_ibs_cbs` (1 or 3), `state_registration` and
+`service_code`, and anyone but the
 owner gets an `ApiError` 403. Unknown keys and malformed codes are an `InvoiceError`
 before the call; an OAuth credential needs `company:write`. A 503 means the IBGE
 table could not be read: nothing changed, retry after `Retry-After`.
@@ -466,6 +473,32 @@ $ref->search('teclado');                          // every kind at once
 `cfop`, `ncm`, `cest`, `cst`, `csosn`, `issService`, `icmsFuel` and `ibsCbsClass` have accessors. **`kind($name)` reaches anything else**, including a classification published after this release — ask `kinds()` rather than trusting this list.
 
 `metadata` comes back as the API sends it and differs per kind: `utrib` on an NCM, `ncm_code` on a CEST, `tax_type` on a CST, `null` on an ISS service.
+
+### Simulating the IBS and CBS
+
+`calculateIbsCbs()` (`POST /ibs-cbs/calculate`, scope `invoice:read`) simulates the IBS and CBS of up to 990 items. Nothing is issued or stored, and the answer says so (`simulated`, `notice`):
+
+```php
+use Stackin\IbsCbsCalculationItem;
+use Stackin\IbsCbsRates;
+
+$result = $ref->calculateIbsCbs(
+    items: [
+        new IbsCbsCalculationItem(cst: '000', classification: '000001', amount: 100.00),
+        ['cst' => '200', 'classification' => '200009', 'base' => 50.00, 'reduction_ibs' => 60.0],
+    ],
+    operationDate: '2026-06-01',            // YYYY-MM-DD
+    documentType: 'nfe',                    // 'nfe' (default), 'nfce' or 'nfse'
+    rates: new IbsCbsRates(rateState: 0.1, rateCity: 0.0, rateFederal: 0.9), // optional
+);
+
+$result->total->ibs;                        // "0.10": amounts are the API's decimal strings
+$result->items[0]->ratesSource;             // 'caller' or 'official_2026'
+```
+
+An item takes `cst` (3 digits), `classification` (6 digits), `amount` and/or `base` (above zero, at least one), the three rates and `reductionIbs`/`reductionCbs` (0-100); `items` may be `IbsCbsCalculationItem` objects or arrays with the same snake_case keys. `rates` are the defaults for items that carry none, and an item's own rate wins. Left out in 2026 the official 2026 rates apply; in any other year they are required, and the API answers 422 `IBS_CBS_RATES_REQUIRED` (an `ApiError`). `documentType` only picks the model the cClassTrib is checked for, and the amounts are always the NF-e's: the simulation does not compute NFS-e amounts, which the Sefin Nacional does. These rules are checked before the call: 1 to 990 items, the `cst` and `classification` patterns, amount or base, the 0-100 ranges and the date format.
+
+The result is an `IbsCbsCalculation` (`simulated`, `notice`, `documentType`, `operationDate`, `items`, `total`). Each `IbsCbsCalculatedItem` has `indicators` (`IbsCbsIndicators`: `group`, `reduction`, `deferral`), `hasGroup`, `rates` and `effectiveRates` (`IbsCbsAppliedRates`, or null), `ratesSource`, `reductionIbs`, `reductionCbs`, `deferral` and `amounts`; the `amounts` and the `total` are an `IbsCbsAmounts` (`base`, `ibsState`, `ibsCity`, `ibs`, `cbs`, `deferredIbsState`, `deferredIbsCity`, `deferredCbs`). Fields the API adds later are ignored.
 
 `cities($name, state: null)` lists the municipalities whose name starts with `$name`, at most 20, each with its IBGE `code` — issuing resolves `cityCode` by itself, so this is for a name that matches more than one:
 
