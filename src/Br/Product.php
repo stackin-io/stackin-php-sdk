@@ -160,6 +160,25 @@ final class Product
         return (10 - $sum % 10) % 10 === (int) substr($gtin, -1);
     }
 
+    /**
+     * A price as the wire takes it: a float through the same decimal
+     * writer the issue lines use, a string checked to be a plain decimal
+     * (up to 10 places, the vUnCom precision) and sent as it is, so no
+     * digit rounds on the way.
+     */
+    public static function priceString(float|string $value): string
+    {
+        if (is_float($value)) {
+            return (string) self::decimalString($value);
+        }
+        $text = trim($value);
+        if (preg_match('/^\d+(\.\d{1,10})?$/', $text) !== 1) {
+            throw new InvoiceError('unitPrice must be a decimal with at most 10 places, such as 18.90');
+        }
+
+        return $text;
+    }
+
     private static function decimalString(?float $value): ?string
     {
         return $value === null ? null : rtrim(rtrim(number_format($value, 10, '.', ''), '0'), '.');

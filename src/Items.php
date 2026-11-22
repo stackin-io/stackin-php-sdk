@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Stackin;
 
+use Stackin\Br\Product;
 use stdClass;
 
 /**
@@ -93,7 +94,7 @@ final class Items extends Client
         string $kind,
         string $description,
         ?string $code = null,
-        ?float $unitPrice = null,
+        float|string|null $unitPrice = null,
         ?string $unit = null,
         ?string $source = null,
         ?string $externalReference = null,
@@ -112,7 +113,7 @@ final class Items extends Client
             'kind' => $kind,
             'description' => $description,
             'code' => $code,
-            'unit_price' => $unitPrice,
+            'unit_price' => $unitPrice === null ? null : Product::priceString($unitPrice),
             'unit' => $unit,
             'source' => $source,
             'external_reference' => $externalReference,
@@ -147,7 +148,7 @@ final class Items extends Client
         string $kind,
         string $description,
         ?string $code = null,
-        ?float $unitPrice = null,
+        float|string|null $unitPrice = null,
         ?string $unit = null,
         ?string $source = null,
         ?string $externalReference = null,
@@ -199,6 +200,10 @@ final class Items extends Client
     public function update(string $itemId, array $changes, ?string $company = null): array
     {
         $escaped = FiscalReference::segment($itemId);
+        $price = $changes['unit_price'] ?? null;
+        if (is_int($price) || is_float($price) || is_string($price)) {
+            $changes['unit_price'] = Product::priceString(is_string($price) ? $price : (float) $price);
+        }
         $body = $changes === [] ? new stdClass() : $changes;
 
         return $this->request('PATCH', "/items/{$escaped}", json: $body, company: $company);

@@ -228,7 +228,7 @@ final class ItemsTest extends TestCase
         self::assertSame([
             'kind' => 'product',
             'description' => 'Cafe torrado 500g',
-            'unit_price' => 18.9,
+            'unit_price' => '18.9',
             'source' => 'nuvemshop',
             'external_reference' => 'ns-variant-1',
             'iss_retained' => false,
@@ -284,8 +284,46 @@ final class ItemsTest extends TestCase
 
         self::assertSame('PATCH', $this->request()->getMethod());
         self::assertSame(self::BASE . '/items/' . self::ITEM_ID, $this->url());
-        self::assertSame(['unit_price' => 20.5, 'notes' => null], $this->body());
+        self::assertSame(['unit_price' => '20.5', 'notes' => null], $this->body());
         self::assertSame(self::ITEM_ID, $item['id']);
+    }
+
+    public function testAUnitPriceStringIsSentAsIsWithTenPlaces(): void
+    {
+        $this->items(self::FULL, 201)->upsert(
+            kind: 'product',
+            description: 'x',
+            unitPrice: '18.9000000001',
+        );
+        self::assertSame('18.9000000001', $this->body()['unit_price']);
+
+        $this->items(self::FULL)->update(self::ITEM_ID, ['unit_price' => '0.0000000001']);
+        self::assertSame('0.0000000001', $this->body()['unit_price']);
+
+        $this->items(self::FULL, 201)->upsert(kind: 'product', description: 'x', unitPrice: 0.0);
+        self::assertSame('0', $this->body()['unit_price']);
+    }
+
+    public function testABadUnitPriceIsRefusedBeforeTheCall(): void
+    {
+        foreach (['1,5', '-1', '1e3', '0.12345678901', ''] as $bad) {
+            try {
+                $this->items(self::FULL, 201)->upsert(
+                    kind: 'product',
+                    description: 'x',
+                    unitPrice: $bad,
+                );
+                self::fail("accepted {$bad}");
+            } catch (InvoiceError) {
+                $this->addToAssertionCount(1);
+            }
+        }
+        try {
+            $this->items(self::FULL)->update(self::ITEM_ID, ['unit_price' => '1,5']);
+            self::fail('update accepted 1,5');
+        } catch (InvoiceError) {
+            $this->addToAssertionCount(1);
+        }
     }
 
     public function testUpdateEscapesTheId(): void

@@ -642,6 +642,7 @@ $items->reactivate($item['id']);
 );
 ```
 
+- `unitPrice` takes a float or a decimal string (up to 10 places) and goes out as a decimal string, so `'18.9000000001'` keeps every digit; a bad string is an `InvoiceError` before the call. `update()` treats a `unit_price` the same way.
 - `create()` and `upsert()` send only the arguments that are not null, and both are the API's
   upsert; `create()` answers the item (an array, like `Clients`) and is kept for parity,
   `upsert()` answers an `ItemSaved` (`->item`, `->created`). It updates the company's item
