@@ -189,9 +189,16 @@ final class Invoice extends Client
      * with this request's recipient data. Both are left out of the
      * request when unset.
      *
-     * $clientEmail and $clientPhone are contact data for the Stackin client,
-     * not for the fiscal document: they are never written into it, and a
-     * reissue does not touch the client. $clientEmail must be a valid
+     * $clientEmail and $clientPhone are the recipient's contact. They are
+     * also kept on the invoice and sent again on a reissue (which does not
+     * touch the client), and written into the fiscal document: NF-e
+     * dest/email (up to 60 characters) and dest/enderDest/fone (digits only,
+     * up to 14, only with a $recipientAddress); NFS-e toma/email (up to 80)
+     * and toma/fone (up to 20 digits). The phone goes out digits only, area
+     * code first; a +55 is dropped unless the recipient is abroad. A value
+     * the layout cannot carry (too long, an e-mail with characters beyond
+     * Latin-1) is left out of the document and the issuance goes on.
+     * $clientEmail must be a valid
      * e-mail; $clientPhone is 8 to 15 digits with an optional leading +
      * (the API drops spaces, dots, dashes and parentheses). They are saved
      * on the client created after a successful issuance, and on an

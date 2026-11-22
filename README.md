@@ -530,9 +530,14 @@ $clients->reactivate($acme['id']);
   there (422) until it is reactivated.
 - `updateClient: true` on `issue()` rewrites an existing client with that request's
   recipient data. Left false, the issuance only counts one more use of it.
-- `clientEmail` and `clientPhone` on `issue()` are contact data for the client, never
-  written into the fiscal document (a reissue does not touch the client). The e-mail must
-  be valid; the phone is 8 to 15 digits with an optional leading `+` (the API drops spaces,
+- `clientEmail` and `clientPhone` on `issue()` are contact data for the client, also kept on
+  the invoice and sent again on a reissue (which does not touch the client). They are
+  written into the fiscal document: NF-e `dest/email` (up to 60 characters) and
+  `dest/enderDest/fone` (digits only, up to 14, only with a `recipientAddress`); NFS-e
+  `toma/email` (up to 80) and `toma/fone` (up to 20 digits). The phone goes out digits
+  only, area code first; a `+55` is dropped unless the recipient is abroad. A value the
+  layout cannot carry (too long, an e-mail with characters beyond Latin-1) is left out of
+  the document and the issuance goes on. The e-mail must be valid; the phone is 8 to 15 digits with an optional leading `+` (the API drops spaces,
   dots, dashes and parentheses). They are saved on the client created after a successful
   issuance, and on an existing one only with `updateClient: true`, and only the ones sent.
   Left out of the request when null.
