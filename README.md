@@ -525,7 +525,8 @@ $clients->reactivate($acme['id']);
   whole address. The API checks the client as a whole, so clearing a Brazilian client's
   `tax_id` is refused like a create without one.
 - On `issue()`, the client fills whichever of `clientName`, `taxId`, `foreignId` and
-  `recipientAddress` are null; the ones given win. With `clientId` none of those four is
+  `recipientAddress` are null; the ones given win. The client's e-mail and phone likewise
+  fill `clientEmail` and `clientPhone` when null. With `clientId` none of those four is
   required by the SDK: the API checks the merged request. A deactivated client is refused
   there (422) until it is reactivated.
 - `updateClient: true` on `issue()` rewrites an existing client with that request's

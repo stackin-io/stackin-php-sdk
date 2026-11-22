@@ -183,8 +183,9 @@ final class Invoice extends Client
      * $clientId names a saved client of the company (see Clients): its
      * name, tax id, foreign id and address fill whichever of $clientName,
      * $taxId, $foreignId and $recipientAddress are null, and the ones
-     * given win. Those four are then not required here: the API checks
-     * the merged request. After a successful issuance a new recipient is
+     * given win. Its e-mail and phone likewise fill $clientEmail and
+     * $clientPhone when null. Those four are then not required here: the
+     * API checks the merged request. After a successful issuance a new recipient is
      * saved as a client; $updateClient true also rewrites an existing one
      * with this request's recipient data. Both are left out of the
      * request when unset.
