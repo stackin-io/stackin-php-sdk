@@ -173,7 +173,9 @@ final class Product
         }
         $text = trim($value);
         if (preg_match('/^\d+(\.\d{1,10})?$/', $text) !== 1) {
-            throw new InvoiceError('unitPrice must be a decimal with at most 10 places, such as 18.90');
+            throw new InvoiceError(
+                'unitPrice must be a decimal with at most 10 places, such as 18.90'
+            );
         }
 
         return $text;

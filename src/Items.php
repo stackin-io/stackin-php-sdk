@@ -202,7 +202,9 @@ final class Items extends Client
         $escaped = FiscalReference::segment($itemId);
         $price = $changes['unit_price'] ?? null;
         if (is_int($price) || is_float($price) || is_string($price)) {
-            $changes['unit_price'] = Product::priceString(is_string($price) ? $price : (float) $price);
+            $changes['unit_price'] = Product::priceString(
+                is_string($price) ? $price : (float) $price
+            );
         }
         $body = $changes === [] ? new stdClass() : $changes;
 
