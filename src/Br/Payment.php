@@ -8,7 +8,8 @@ use Stackin\Errors\InvoiceError;
 
 /**
  * One payment of an NF-e (detPag). `method` is the two-digit tPag code,
- * such as "01", "03", "17", "90" or "99"; "99" needs `description` naming the method. `amount` is in BRL, 0 for "90".
+ * such as "01", "03", "17", "90" or "99"; "99" needs `description`
+ * naming the method. `amount` is in BRL, 0 for "90".
  */
 final class Payment
 {
