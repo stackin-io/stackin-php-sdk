@@ -8,7 +8,7 @@ use Stackin\Errors\InvoiceError;
 
 /**
  * One volume of an NF-e's transport: packages carried and their weight in
- * kg.
+ * kg, at most 3 decimal places.
  */
 final class TransportVolume
 {
@@ -23,8 +23,8 @@ final class TransportVolume
         if ($quantity !== null && $quantity < 0) {
             throw new InvoiceError('volume quantity cannot be negative');
         }
-        Decimals::optional($netWeight, 'volume netWeight');
-        Decimals::optional($grossWeight, 'volume grossWeight');
+        Decimals::optional($netWeight, 'volume netWeight', 3);
+        Decimals::optional($grossWeight, 'volume grossWeight', 3);
     }
 
     /**
@@ -38,10 +38,11 @@ final class TransportVolume
                 'species' => $this->species,
                 'brand' => $this->brand,
                 'numbering' => $this->numbering,
-                'net_weight' => Decimals::optional($this->netWeight, 'volume netWeight'),
+                'net_weight' => Decimals::optional($this->netWeight, 'volume netWeight', 3),
                 'gross_weight' => Decimals::optional(
                     $this->grossWeight,
                     'volume grossWeight',
+                    3,
                 ),
             ],
             static fn (mixed $value): bool => $value !== null,

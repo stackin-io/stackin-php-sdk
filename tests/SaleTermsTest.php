@@ -250,10 +250,22 @@ final class SaleTermsTest extends TestCase
         new Payment('3', 5.0);
     }
 
-    public function testWeightsHaveNoPlacesLimit(): void
+    public function testVolumeWeightsTakeThreePlaces(): void
     {
-        $volume = new TransportVolume(netWeight: '1.2345678');
-        $this->assertSame('1.2345678', $volume->toArray()['net_weight']);
+        $this->expectException(InvoiceError::class);
+        new TransportVolume(netWeight: '1.2345');
+    }
+
+    public function testVolumeGrossWeightTakesThreePlaces(): void
+    {
+        $this->expectException(InvoiceError::class);
+        new TransportVolume(grossWeight: 1.2345);
+    }
+
+    public function testLineAndCatalogWeightsHaveNoPlacesLimit(): void
+    {
+        $product = new Product(description: 'Widget', netWeight: '1.2345678');
+        $this->assertSame('1.2345678', $product->toArray()['product']['net_weight']);
     }
 
     public function testNegativeWeightIsRefused(): void
