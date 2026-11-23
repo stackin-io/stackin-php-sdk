@@ -138,7 +138,14 @@ final class WebhooksTest extends TestCase
     public function testEventsAreTheApiOnes(): void
     {
         $this->assertSame(
-            ['invoice.authorized', 'invoice.rejected', 'invoice.cancelled', 'invoice.corrected'],
+            [
+                'invoice.authorized',
+                'invoice.rejected',
+                'invoice.cancelled',
+                'invoice.corrected',
+                'received_invoice.stored',
+                'received_invoice.full_document',
+            ],
             Webhooks::EVENTS,
         );
     }
