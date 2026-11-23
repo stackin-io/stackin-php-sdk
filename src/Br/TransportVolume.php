@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace Stackin\Br;
 
-use Stackin\Errors\InvoiceError;
-
 /**
  * One volume of an NF-e's transport: packages carried and their weight in
  * kg, at most 3 decimal places.
@@ -20,9 +18,6 @@ final class TransportVolume
         public readonly float|string|null $netWeight = null,
         public readonly float|string|null $grossWeight = null,
     ) {
-        if ($quantity !== null && $quantity < 0) {
-            throw new InvoiceError('volume quantity cannot be negative');
-        }
         Decimals::optional($netWeight, 'volume netWeight', 3);
         Decimals::optional($grossWeight, 'volume grossWeight', 3);
     }

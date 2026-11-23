@@ -28,9 +28,6 @@ final class Transport
                 "freightMode must be one of 0, 1, 2, 3, 4 or 9, got '{$freightMode}'",
             );
         }
-        if ($volumes !== null && count($volumes) > 5000) {
-            throw new InvoiceError('transport takes at most 5000 volumes');
-        }
     }
 
     /**

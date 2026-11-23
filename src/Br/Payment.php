@@ -8,8 +8,7 @@ use Stackin\Errors\InvoiceError;
 
 /**
  * One payment of an NF-e (detPag). `method` is the two-digit tPag code,
- * such as "01", "03", "17", "90" or "99"; "99" needs `description` (2 to
- * 60 characters) naming the method. `amount` is in BRL, 0 for "90".
+ * such as "01", "03", "17", "90" or "99"; "99" needs `description` naming the method. `amount` is in BRL, 0 for "90".
  */
 final class Payment
 {
@@ -24,12 +23,6 @@ final class Payment
         }
         if ($method === '99' && ($description === null || trim($description) === '')) {
             throw new InvoiceError("payment method '99' requires a description");
-        }
-        if ($description !== null) {
-            $length = mb_strlen(trim($description));
-            if ($length < 2 || $length > 60) {
-                throw new InvoiceError('payment description must be 2 to 60 characters');
-            }
         }
         Decimals::format($amount, 'payment amount', 2);
     }
