@@ -32,6 +32,10 @@ use Stackin\Errors\InvoiceError;
  * without it). With it `description` is optional, and the NF-e's ncm and
  * cfop are not required here: the API checks the filled line.
  *
+ * `netWeight` and `grossWeight` are one unit's weight in kg (NF-e only), sent
+ * under `product`; they fill the volume the API derives when `transport`
+ * carries none.
+ *
  * `ibsCbs` is the IBS/CBS group, sent under `br.ibs_cbs`: an `IbsCbs`, or
  * the same keys as a plain array.
  */
@@ -76,7 +80,11 @@ final class Product
         public readonly IbsCbs|array|null $ibsCbs = null,
         public readonly ?Fuel $fuel = null,
         public readonly ?string $itemId = null,
+        public readonly float|string|null $netWeight = null,
+        public readonly float|string|null $grossWeight = null,
     ) {
+        Decimals::optional($netWeight, 'netWeight');
+        Decimals::optional($grossWeight, 'grossWeight');
         if ($description === null && $itemId === null) {
             throw new InvoiceError('description is required unless itemId is given');
         }
@@ -205,6 +213,8 @@ final class Product
                 'other_expenses' => $this->otherExpenses,
                 'purchase_order' => $this->purchaseOrder,
                 'purchase_order_item' => $this->purchaseOrderItem,
+                'net_weight' => Decimals::optional($this->netWeight, 'netWeight'),
+                'gross_weight' => Decimals::optional($this->grossWeight, 'grossWeight'),
             ],
             static fn (mixed $value): bool => $value !== null,
         );

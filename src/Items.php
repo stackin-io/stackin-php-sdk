@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Stackin;
 
+use Stackin\Br\Decimals;
 use Stackin\Br\Product;
 use stdClass;
 
@@ -89,6 +90,10 @@ final class Items extends Client
      * ItemSaved::$created tells the 201 (new) from the 200 (updated). A
      * $code that belongs to another item is an ItemAlreadyExistsError.
      * $issRetained is for a service; $origin needs $taxSituation.
+     * $netWeight and $grossWeight (kg per unit) are for a
+     * product and fill the issuance line's weights. $ibsCbsCst (3 digits)
+     * and $ibsCbsClass (cClassTrib, 6 digits) go together and fill the
+     * line's IBS/CBS group when it sends one without them.
      */
     public function upsert(
         string $kind,
@@ -107,6 +112,10 @@ final class Items extends Client
         ?string $gtin = null,
         ?string $serviceCode = null,
         ?bool $issRetained = null,
+        float|string|null $netWeight = null,
+        float|string|null $grossWeight = null,
+        ?string $ibsCbsCst = null,
+        ?string $ibsCbsClass = null,
         ?string $company = null,
     ): ItemSaved {
         $fields = [
@@ -126,6 +135,10 @@ final class Items extends Client
             'gtin' => $gtin,
             'service_code' => $serviceCode,
             'iss_retained' => $issRetained,
+            'net_weight' => Decimals::optional($netWeight, 'netWeight'),
+            'gross_weight' => Decimals::optional($grossWeight, 'grossWeight'),
+            'ibs_cbs_cst' => $ibsCbsCst,
+            'ibs_cbs_class' => $ibsCbsClass,
         ];
         $payload = array_filter($fields, static fn (mixed $value): bool => $value !== null);
 
@@ -161,6 +174,10 @@ final class Items extends Client
         ?string $gtin = null,
         ?string $serviceCode = null,
         ?bool $issRetained = null,
+        float|string|null $netWeight = null,
+        float|string|null $grossWeight = null,
+        ?string $ibsCbsCst = null,
+        ?string $ibsCbsClass = null,
         ?string $company = null,
     ): array {
         return $this->upsert(
@@ -180,6 +197,10 @@ final class Items extends Client
             $gtin,
             $serviceCode,
             $issRetained,
+            $netWeight,
+            $grossWeight,
+            $ibsCbsCst,
+            $ibsCbsClass,
             $company,
         )->item;
     }
@@ -188,6 +209,7 @@ final class Items extends Client
      * Changes only the fields in $changes, keyed by their API names: kind,
      * description, code, unit_price, unit, external_reference, notes, ncm,
      * cfop, tax_situation, origin, cest, gtin, service_code, iss_retained,
+     * net_weight, gross_weight, ibs_cbs_cst, ibs_cbs_class,
      * is_active. A null value clears the field.
      *
      * The API checks the item as a whole, so turning a product into a
