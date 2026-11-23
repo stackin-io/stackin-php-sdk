@@ -90,7 +90,7 @@ final class Items extends Client
      * ItemSaved::$created tells the 201 (new) from the 200 (updated). A
      * $code that belongs to another item is an ItemAlreadyExistsError.
      * $issRetained is for a service; $origin needs $taxSituation.
-     * $netWeight and $grossWeight (kg per unit) are for a
+     * $netWeight and $grossWeight (kg per unit, up to 6 places) are for a
      * product and fill the issuance line's weights. $ibsCbsCst (3 digits)
      * and $ibsCbsClass (cClassTrib, 6 digits) go together and fill the
      * line's IBS/CBS group when it sends one without them.
@@ -135,8 +135,8 @@ final class Items extends Client
             'gtin' => $gtin,
             'service_code' => $serviceCode,
             'iss_retained' => $issRetained,
-            'net_weight' => Decimals::optional($netWeight, 'netWeight'),
-            'gross_weight' => Decimals::optional($grossWeight, 'grossWeight'),
+            'net_weight' => Decimals::optional($netWeight, 'netWeight', 6),
+            'gross_weight' => Decimals::optional($grossWeight, 'grossWeight', 6),
             'ibs_cbs_cst' => $ibsCbsCst,
             'ibs_cbs_class' => $ibsCbsClass,
         ];

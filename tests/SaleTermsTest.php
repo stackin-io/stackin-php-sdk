@@ -262,7 +262,7 @@ final class SaleTermsTest extends TestCase
         new TransportVolume(grossWeight: 1.2345);
     }
 
-    public function testLineAndCatalogWeightsHaveNoPlacesLimit(): void
+    public function testLineWeightHasNoPlacesLimit(): void
     {
         $product = new Product(description: 'Widget', netWeight: '1.2345678');
         $this->assertSame('1.2345678', $product->toArray()['product']['net_weight']);
@@ -361,6 +361,13 @@ final class SaleTermsTest extends TestCase
         foreach (['net_weight', 'gross_weight', 'ibs_cbs_cst', 'ibs_cbs_class'] as $key) {
             $this->assertArrayNotHasKey($key, $body);
         }
+    }
+
+    public function testCatalogWeightTakesSixPlaces(): void
+    {
+        $items = new Items(apiKey: 'key', baseUrl: 'https://sdk.test');
+        $this->expectException(InvoiceError::class);
+        $items->upsert('product', 'Widget', grossWeight: '1.1234567');
     }
 
     public function testNegativeCatalogWeightIsRefused(): void
