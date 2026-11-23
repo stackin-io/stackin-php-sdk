@@ -403,6 +403,29 @@ confirm it, and only then put it on an item. `missing_information` lists what
 would settle it; answer through `answers` and ask again. `description` is 3 to
 500 characters, checked locally.
 
+### Dry run, and an NFS-e whose outcome is unknown
+
+`validate()` takes the arguments of `issue()` (no idempotency key) and runs the API's
+rules without transmitting, taking a number or charging. It answers a
+`ValidationResult` (`valid`, `errors`, `warnings`) both when the rules pass and when
+they fail; each finding has `code`, `message` and `field`, plus `sefaz_rejection`,
+`expected`, `received` or `fix_url` when the API has them. An unreadable body, an
+unknown client or item, a credential or a rate limit still throws `ApiError`.
+
+```php
+$check = $invoice->validate(DocumentType::NFE, 'Acme', '12345678000195', $items, $address);
+if (!$check->valid) {
+    foreach ($check->errors as $finding) {
+        echo $finding['field'], ': ', $finding['message'], "\n";
+    }
+}
+```
+
+`consultByDps($dpsId)` reads an NFS-e by the DPS id: the `documentId` of an
+`OUTCOME_UNKNOWN` error says whether the authority took the issuance. It returns what
+`consult()` returns, a cancelled note carrying `status` `cancelled`; a `400` means the
+id is not this company's and a `404` that nothing was issued.
+
 ## Documents issued against you
 
 Everything above serves the **issuer**. These two serve the **recipient**: what
@@ -439,6 +462,11 @@ $client->manifest(
     'Mercadoria nunca chegou ao endereco',
 );
 ```
+
+`receivedXml($accessKey)` returns the XML (`procNFe`) of a received NF-e as a string of raw
+bytes, never billed. While only the summary is stored it throws `ApiError` 409 with
+`errorCode` `RECEIVED_XML_NOT_AVAILABLE`; manifest the document to get the full one.
+`PaymentRequiredError` with `RECEIVED_PAYMENT_REQUIRED` means the account cannot pay for it.
 
 Before you answer a document the SEFAZ sends only a **summary** (`resNFe`): access
 key, issuer, amount, date. The **full document** (`nfeProc`) arrives after a
@@ -581,7 +609,9 @@ $clients->reactivate($acme['id']);
 ## Webhooks
 
 `Webhooks` registers where the company's events are delivered: `invoice.authorized`,
-`invoice.rejected`, `invoice.cancelled` and `invoice.corrected` (`Webhooks::EVENTS`).
+`invoice.rejected`, `invoice.cancelled`, `invoice.corrected`, and for documents
+issued against the company `received_invoice.stored` and `received_invoice.full_document`
+(`Webhooks::EVENTS`).
 An endpoint receives the events of the credential's own environment only.
 
 ```php
@@ -714,7 +744,7 @@ $items->reactivate($item['id']);
 
 ## Errors
 
-- `Stackin\Errors\ApiError` — the API responded with a non-2xx status (`statusCode`/`detail` properties) — a 401 here means `api_key` is missing, wrong, or was rotated.
+- `Stackin\Errors\ApiError` — the API responded with a non-2xx status (`statusCode`/`detail` properties) — a 401 here means `api_key` is missing, wrong, or was rotated. It also carries, null when the body has none: `errorCode` (the API's code, e.g. `NCM_INVALID`, `OUTCOME_UNKNOWN`, `539`), `field` (the request field a rule refused), `retryable` (a nullable bool), `documentId` (the id an unanswered NFS-e can be consulted by, see `consultByDps()`), `sefazRejection` and the decoded `body`. When the API sends a rule's `message`, `detail` is that message.
 - The company refusals extend `ApiError`, so a `catch (ApiError)` still catches them. None is retried:
   - `Stackin\Errors\CompanyRequiredError` — `422`: the credential covers several companies and the request named none. `companies` lists them.
   - `Stackin\Errors\CompanyNotInScopeError` — `403`: the named company is not covered. `companies` lists the ones that are.

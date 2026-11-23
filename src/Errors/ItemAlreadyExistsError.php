@@ -15,8 +15,9 @@ final class ItemAlreadyExistsError extends ApiError
         int $statusCode,
         string $detail,
         public readonly string $itemId = '',
-        public readonly ?string $field = null,
+        ?string $field = null,
     ) {
         parent::__construct($statusCode, $detail);
+        $this->field = $field;
     }
 }

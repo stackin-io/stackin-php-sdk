@@ -153,90 +153,31 @@ final class Invoice extends Client
     }
 
     /**
-     * Issues a fiscal document.
-     *
-     * Pass $idempotencyKey to make a retry safe: the same key with the same
-     * body replays the first response instead of issuing a second document.
-     *
-     * $externalReference is the caller's own id for the document, an order
-     * number say (up to 255 characters): stored as sent and returned on every
-     * read and webhook. It is left out of the request when null.
-     *
-     * Every argument after it is optional too and left out of the request
-     * when null, so a call that does not pass them sends the same body:
-     *
-     * - $discount: a discount on the whole document, in BRL, spread by the
-     *   API over the lines.
-     * - $issuedAt: the emission moment, sent as RFC 3339 with its offset.
-     *   NF-e: at most 30 days back and 5 minutes ahead; NFS-e: never ahead.
-     * - NF-e only: $purpose (normal by default), $direction (out by
-     *   default) and $referencedKeys, the 44-character access keys of the
-     *   documents this one refers to — required for a complementary note
-     *   and, but for a few CFOPs, for a return.
-     * - NF-e to a buyer abroad (recipientAddress state EX): $taxId is left
-     *   out (null), $foreignId identifies the buyer and $export says where
-     *   the goods leave Brazil.
-     *
-     * $taxId is required everywhere else. The fiscal rules between these
-     * fields belong to the API, which answers them by name.
-     *
-     * $clientId names a saved client of the company (see Clients): its
-     * name, tax id, foreign id and address fill whichever of $clientName,
-     * $taxId, $foreignId and $recipientAddress are null, and the ones
-     * given win. Its e-mail and phone likewise fill $clientEmail and
-     * $clientPhone when null. Those four are then not required here: the
-     * API checks the merged request. After a successful issuance a new recipient is
-     * saved as a client; $updateClient true also rewrites an existing one
-     * with this request's recipient data. Both are left out of the
-     * request when unset.
-     *
-     * $clientEmail and $clientPhone are the recipient's contact. They are
-     * also kept on the invoice and sent again on a reissue (which does not
-     * touch the client), and written into the fiscal document: NF-e
-     * dest/email (up to 60 characters) and dest/enderDest/fone (digits only,
-     * up to 14, only with a $recipientAddress); NFS-e toma/email (up to 80)
-     * and toma/fone (up to 20 digits). The phone goes out digits only, area
-     * code first; a +55 is dropped unless the recipient is abroad. A value
-     * the layout cannot carry (too long, an e-mail with characters beyond
-     * Latin-1) is left out of the document and the issuance goes on.
-     * $clientEmail must be a valid
-     * e-mail; $clientPhone is 8 to 15 digits with an optional leading +
-     * (the API drops spaces, dots, dashes and parentheses). They are saved
-     * on the client created after a successful issuance, and on an
-     * existing one only with $updateClient true, and only the ones sent.
-     * Left out of the request when null.
-     *
-     * $contingency true sends an NF-e through the UF's contingency
-     * authorizer (SVC-AN/SVC-RS, tpEmis 6/7) for when its own is down.
-     * Left false, it is not sent.
-     *
      * @param Product[] $items
      * @param string[]|null $referencedKeys
      * @return array<string, mixed>
      */
-    public function issue(
+    private static function issuePayload(
         DocumentType $documentType,
         ?string $clientName,
         ?string $taxId,
         array $items,
-        ?Address $recipientAddress = null,
-        ?string $series = null,
-        ?string $number = null,
-        ?string $idempotencyKey = null,
-        ?string $externalReference = null,
-        ?float $discount = null,
-        ?DateTimeInterface $issuedAt = null,
-        ?Purpose $purpose = null,
-        ?Direction $direction = null,
-        ?array $referencedKeys = null,
-        ?string $foreignId = null,
-        ?Export $export = null,
-        ?string $company = null,
-        ?string $clientId = null,
-        bool $updateClient = false,
-        bool $contingency = false,
-        ?string $clientEmail = null,
-        ?string $clientPhone = null,
+        ?Address $recipientAddress,
+        ?string $series,
+        ?string $number,
+        ?string $externalReference,
+        ?float $discount,
+        ?DateTimeInterface $issuedAt,
+        ?Purpose $purpose,
+        ?Direction $direction,
+        ?array $referencedKeys,
+        ?string $foreignId,
+        ?Export $export,
+        ?string $clientId,
+        bool $updateClient,
+        bool $contingency,
+        ?string $clientEmail,
+        ?string $clientPhone,
     ): array {
         if ($items === []) {
             throw new InvoiceError("items can't be empty");
@@ -324,11 +265,236 @@ final class Invoice extends Client
             }
         }
 
+        return $payload;
+    }
+
+    /**
+     * Issues a fiscal document.
+     *
+     * Pass $idempotencyKey to make a retry safe: the same key with the same
+     * body replays the first response instead of issuing a second document.
+     *
+     * $externalReference is the caller's own id for the document, an order
+     * number say (up to 255 characters): stored as sent and returned on every
+     * read and webhook. It is left out of the request when null.
+     *
+     * Every argument after it is optional too and left out of the request
+     * when null, so a call that does not pass them sends the same body:
+     *
+     * - $discount: a discount on the whole document, in BRL, spread by the
+     *   API over the lines.
+     * - $issuedAt: the emission moment, sent as RFC 3339 with its offset.
+     *   NF-e: at most 30 days back and 5 minutes ahead; NFS-e: never ahead.
+     * - NF-e only: $purpose (normal by default), $direction (out by
+     *   default) and $referencedKeys, the 44-character access keys of the
+     *   documents this one refers to — required for a complementary note
+     *   and, but for a few CFOPs, for a return.
+     * - NF-e to a buyer abroad (recipientAddress state EX): $taxId is left
+     *   out (null), $foreignId identifies the buyer and $export says where
+     *   the goods leave Brazil.
+     *
+     * $taxId is required everywhere else. The fiscal rules between these
+     * fields belong to the API, which answers them by name.
+     *
+     * $clientId names a saved client of the company (see Clients): its
+     * name, tax id, foreign id and address fill whichever of $clientName,
+     * $taxId, $foreignId and $recipientAddress are null, and the ones
+     * given win. Its e-mail and phone likewise fill $clientEmail and
+     * $clientPhone when null. Those four are then not required here: the
+     * API checks the merged request. After a successful issuance a new recipient is
+     * saved as a client; $updateClient true also rewrites an existing one
+     * with this request's recipient data. Both are left out of the
+     * request when unset.
+     *
+     * $clientEmail and $clientPhone are the recipient's contact. They are
+     * also kept on the invoice and sent again on a reissue (which does not
+     * touch the client), and written into the fiscal document: NF-e
+     * dest/email (up to 60 characters) and dest/enderDest/fone (digits only,
+     * up to 14, only with a $recipientAddress); NFS-e toma/email (up to 80)
+     * and toma/fone (up to 20 digits). The phone goes out digits only, area
+     * code first; a +55 is dropped unless the recipient is abroad. A value
+     * the layout cannot carry (too long, an e-mail with characters beyond
+     * Latin-1) is left out of the document and the issuance goes on.
+     * $clientEmail must be a valid
+     * e-mail; $clientPhone is 8 to 15 digits with an optional leading +
+     * (the API drops spaces, dots, dashes and parentheses). They are saved
+     * on the client created after a successful issuance, and on an
+     * existing one only with $updateClient true, and only the ones sent.
+     * Left out of the request when null.
+     *
+     * $contingency true sends an NF-e through the UF's contingency
+     * authorizer (SVC-AN/SVC-RS, tpEmis 6/7) for when its own is down.
+     * Left false, it is not sent.
+     *
+     * @param Product[] $items
+     * @param string[]|null $referencedKeys
+     * @return array<string, mixed>
+     */
+    public function issue(
+        DocumentType $documentType,
+        ?string $clientName,
+        ?string $taxId,
+        array $items,
+        ?Address $recipientAddress = null,
+        ?string $series = null,
+        ?string $number = null,
+        ?string $idempotencyKey = null,
+        ?string $externalReference = null,
+        ?float $discount = null,
+        ?DateTimeInterface $issuedAt = null,
+        ?Purpose $purpose = null,
+        ?Direction $direction = null,
+        ?array $referencedKeys = null,
+        ?string $foreignId = null,
+        ?Export $export = null,
+        ?string $company = null,
+        ?string $clientId = null,
+        bool $updateClient = false,
+        bool $contingency = false,
+        ?string $clientEmail = null,
+        ?string $clientPhone = null,
+    ): array {
+        $payload = self::issuePayload(
+            $documentType,
+            $clientName,
+            $taxId,
+            $items,
+            $recipientAddress,
+            $series,
+            $number,
+            $externalReference,
+            $discount,
+            $issuedAt,
+            $purpose,
+            $direction,
+            $referencedKeys,
+            $foreignId,
+            $export,
+            $clientId,
+            $updateClient,
+            $contingency,
+            $clientEmail,
+            $clientPhone,
+        );
+
         return $this->request(
             'POST',
             '/invoices',
             json: $payload,
             idempotencyKey: $idempotencyKey,
+            company: $company,
+        );
+    }
+
+    /**
+     * Dry run of issue(): the same arguments, checked by the API's own
+     * rules without transmitting anything, taking a number or charging.
+     * No idempotency key is sent.
+     *
+     * Answers a ValidationResult for both outcomes: valid with the
+     * warnings, or not valid with every finding in errors. A body the
+     * API cannot read (an invalid field, an unknown client or item, a
+     * credential or rate limit refusal) still throws ApiError.
+     *
+     * @param Product[] $items
+     * @param string[]|null $referencedKeys
+     */
+    public function validate(
+        DocumentType $documentType,
+        ?string $clientName,
+        ?string $taxId,
+        array $items,
+        ?Address $recipientAddress = null,
+        ?string $series = null,
+        ?string $number = null,
+        ?string $externalReference = null,
+        ?float $discount = null,
+        ?DateTimeInterface $issuedAt = null,
+        ?Purpose $purpose = null,
+        ?Direction $direction = null,
+        ?array $referencedKeys = null,
+        ?string $foreignId = null,
+        ?Export $export = null,
+        ?string $company = null,
+        ?string $clientId = null,
+        bool $updateClient = false,
+        bool $contingency = false,
+        ?string $clientEmail = null,
+        ?string $clientPhone = null,
+    ): ValidationResult {
+        $payload = self::issuePayload(
+            $documentType,
+            $clientName,
+            $taxId,
+            $items,
+            $recipientAddress,
+            $series,
+            $number,
+            $externalReference,
+            $discount,
+            $issuedAt,
+            $purpose,
+            $direction,
+            $referencedKeys,
+            $foreignId,
+            $export,
+            $clientId,
+            $updateClient,
+            $contingency,
+            $clientEmail,
+            $clientPhone,
+        );
+
+        try {
+            $result = $this->request(
+                'POST',
+                '/invoices/validate',
+                json: $payload,
+                company: $company,
+            );
+        } catch (ApiError $error) {
+            $body = $error->body;
+            if ($error->statusCode !== 422 || $body === null || !array_key_exists('valid', $body)) {
+                throw $error;
+            }
+
+            return ValidationResult::fromArray($body);
+        }
+
+        return ValidationResult::fromArray($result);
+    }
+
+    /**
+     * Consults an NFS-e by the DPS id the issuance was sent with: the
+     * document_id of an OUTCOME_UNKNOWN error says whether the authority
+     * took it. Same result as consult(), a cancelled note carrying
+     * status "cancelled". ApiError 400 when the id is not this company's,
+     * 404 when the authority has no note, meaning nothing was issued.
+     *
+     * @return array<string, mixed>
+     */
+    public function consultByDps(string $dpsId, ?string $company = null): array
+    {
+        return $this->request(
+            'GET',
+            '/invoices/dps/' . FiscalReference::segment($dpsId),
+            company: $company,
+        );
+    }
+
+    /**
+     * The XML (procNFe) of a received NF-e, as raw bytes.
+     *
+     * Never billed. ApiError 409 with errorCode RECEIVED_XML_NOT_AVAILABLE
+     * while only the summary is stored (manifest it to get the full
+     * document), PaymentRequiredError with RECEIVED_PAYMENT_REQUIRED when
+     * the account cannot pay for the document, 404 when it is unknown.
+     */
+    public function receivedXml(string $accessKey, ?string $company = null): string
+    {
+        return $this->send(
+            'GET',
+            '/received-invoices/' . FiscalReference::segment($accessKey) . '/xml',
             company: $company,
         );
     }

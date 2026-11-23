@@ -23,8 +23,9 @@ final class RateLimitedError extends ApiError
         string $detail,
         public readonly ?int $retryAfter = null,
         public readonly ?DateTimeImmutable $retryAt = null,
-        public readonly ?string $errorCode = null,
+        ?string $errorCode = null,
     ) {
         parent::__construct($statusCode, $detail);
+        $this->errorCode = $errorCode;
     }
 }

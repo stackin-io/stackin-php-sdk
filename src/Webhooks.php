@@ -26,6 +26,8 @@ final class Webhooks extends Client
         'invoice.rejected',
         'invoice.cancelled',
         'invoice.corrected',
+        'received_invoice.stored',
+        'received_invoice.full_document',
     ];
 
     private const SECRET_MIN = 16;

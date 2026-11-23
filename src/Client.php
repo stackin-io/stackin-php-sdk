@@ -254,7 +254,7 @@ abstract class Client
             if ($status === 429) {
                 throw self::rateLimited($detail, $decoded, $response->getHeaderLine('Retry-After'));
             }
-            throw self::apiError($status, $detail);
+            throw self::apiError($status, $detail, $decoded);
         }
 
         return [$status, $body];
@@ -263,10 +263,52 @@ abstract class Client
     /**
      * The refusals a caller acts on by name get their own type; every
      * other one stays a plain ApiError with the same detail string.
+     *
+     * @param array<array-key, mixed> $body
      */
-    private static function apiError(int $status, mixed $detail): ApiError
+    private static function apiError(int $status, mixed $detail, array $body = []): ApiError
+    {
+        return self::apiErrorOf($status, $detail)->withFields(
+            ...(self::errorFields($detail, $body) + ['body' => $body ?: null]),
+        );
+    }
+
+    /**
+     * code, field, retryable, documentId and sefazRejection from a
+     * structured rule detail, an authority "error" block or the body's
+     * top level, each null when absent.
+     *
+     * @param array<array-key, mixed> $body
+     * @return array{errorCode: ?string, field: ?string, retryable: ?bool,
+     *     documentId: ?string, sefazRejection: ?array<string, mixed>}
+     */
+    private static function errorFields(mixed $detail, array $body): array
+    {
+        $block = $body['error'] ?? null;
+        $block = is_array($block) ? $block : [];
+        $rule = is_array($detail) && !array_is_list($detail) ? $detail : [];
+
+        $code = $block['code'] ?? $rule['code'] ?? $body['code'] ?? null;
+        $field = $rule['field'] ?? null;
+        $retryable = $block['retryable'] ?? null;
+        $documentId = $block['document_id'] ?? null;
+        $rejection = $rule['sefaz_rejection'] ?? null;
+
+        return [
+            'errorCode' => is_string($code) || is_int($code) ? (string) $code : null,
+            'field' => is_string($field) ? $field : null,
+            'retryable' => is_bool($retryable) ? $retryable : null,
+            'documentId' => is_string($documentId) ? $documentId : null,
+            'sefazRejection' => is_array($rejection) ? $rejection : null,
+        ];
+    }
+
+    private static function apiErrorOf(int $status, mixed $detail): ApiError
     {
         $text = is_string($detail) ? $detail : (string) json_encode($detail);
+        if (is_array($detail) && is_string($detail['message'] ?? null)) {
+            $text = $detail['message'];
+        }
         if ($status === 402) {
             return new PaymentRequiredError($status, $text);
         }
@@ -386,12 +428,16 @@ abstract class Client
         $retryAt = $fields['retry_at'] ?? null;
         $seconds = trim($retryAfter);
 
-        return new RateLimitedError(
+        $error = new RateLimitedError(
             429,
             $text,
             ctype_digit($seconds) ? (int) $seconds : null,
             is_string($retryAt) ? self::moment($retryAt) : null,
             is_string($code) ? $code : null,
+        );
+
+        return $error->withFields(
+            ...(self::errorFields($detail, $body) + ['body' => $body ?: null]),
         );
     }
 
