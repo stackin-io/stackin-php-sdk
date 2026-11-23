@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.25.0 — 2026-11-23
+
+### Features
+- NF-e sale terms, product weights and catalog weights/IBS-CBS (#53)
+
+### Bug Fixes
+- check weights on Items::update, drop checks outside the contract (#53)
+- catalog item weights take at most 6 decimal places (#53)
+- volume weights take at most 3 decimal places (#53)
+
+### Style
+- wrap Payment docblock (#53)
+
 ## v0.24.0 — 2026-11-22
 
 ### Features
