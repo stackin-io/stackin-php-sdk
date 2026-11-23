@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.24.0 — 2026-11-22
+
+### Features
+- validate, consultByDps, receivedXml and structured error fields (#51)
+
 ## v0.23.0 — 2026-11-22
 
 ### Features
