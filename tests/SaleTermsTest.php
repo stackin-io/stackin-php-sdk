@@ -286,12 +286,6 @@ final class SaleTermsTest extends TestCase
         new Intermediary('12345678000195', 'x');
     }
 
-    public function testCardIntegrationMustBeOneOrTwo(): void
-    {
-        $this->expectException(InvoiceError::class);
-        new PaymentCard('3');
-    }
-
     public function testPaymentsAreLimitedToOneToAHundred(): void
     {
         $this->expectException(InvoiceError::class);
@@ -368,6 +362,37 @@ final class SaleTermsTest extends TestCase
         $items = new Items(apiKey: 'key', baseUrl: 'https://sdk.test');
         $this->expectException(InvoiceError::class);
         $items->upsert('product', 'Widget', grossWeight: '1.1234567');
+    }
+
+    public function testUpdateChecksCatalogWeights(): void
+    {
+        $items = $this->wire(
+            new Items(apiKey: 'key', baseUrl: 'https://sdk.test'),
+            ['result' => ['id' => 'x']],
+        );
+        $this->assertInstanceOf(Items::class, $items);
+        $items->update('x', ['net_weight' => 0.25, 'gross_weight' => '0.300000']);
+        $this->assertSame('0.25', $this->body()['net_weight']);
+        $this->assertSame('0.300000', $this->body()['gross_weight']);
+
+        $this->expectException(InvoiceError::class);
+        $items->update('x', ['net_weight' => '1.1234567']);
+    }
+
+    public function testUpdateRefusesNegativeCatalogWeight(): void
+    {
+        $items = new Items(apiKey: 'key', baseUrl: 'https://sdk.test');
+        $this->expectException(InvoiceError::class);
+        $items->update('x', ['gross_weight' => -1]);
+    }
+
+    public function testChecksOutsideTheContractAreGone(): void
+    {
+        $this->assertSame('3', (new PaymentCard('3'))->toArray()['integration']);
+        $this->assertSame('x', (new Payment('01', 1.0, 'x'))->toArray()['description']);
+        $this->assertSame(-1, (new TransportVolume(quantity: -1))->toArray()['quantity']);
+        $volumes = array_fill(0, 5001, new TransportVolume(quantity: 1));
+        $this->assertCount(5001, (new Transport('0', $volumes))->toArray()['volumes']);
     }
 
     public function testNegativeCatalogWeightIsRefused(): void

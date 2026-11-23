@@ -228,6 +228,16 @@ final class Items extends Client
                 is_string($price) ? $price : (float) $price
             );
         }
+        foreach (['net_weight', 'gross_weight'] as $field) {
+            $weight = $changes[$field] ?? null;
+            if (is_int($weight) || is_float($weight) || is_string($weight)) {
+                $changes[$field] = Decimals::format(
+                    is_int($weight) ? (float) $weight : $weight,
+                    $field,
+                    6,
+                );
+            }
+        }
         $body = $changes === [] ? new stdClass() : $changes;
 
         return $this->request('PATCH', "/items/{$escaped}", json: $body, company: $company);

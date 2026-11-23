@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace Stackin\Br;
 
-use Stackin\Errors\InvoiceError;
-
 /**
  * The electronic payment's processor and authorization. `integration` is
  * tpIntegra: "1" integrated with the seller's system, "2" not integrated.
@@ -19,9 +17,6 @@ final class PaymentCard
         public readonly ?string $brand = null,
         public readonly ?string $authorization = null,
     ) {
-        if ($integration !== '1' && $integration !== '2') {
-            throw new InvoiceError("card integration must be '1' or '2', got '{$integration}'");
-        }
     }
 
     /**
