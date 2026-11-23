@@ -7,7 +7,11 @@ namespace Stackin;
 use DateTimeInterface;
 use GuzzleHttp\Client as HttpClient;
 use GuzzleHttp\Exception\GuzzleException;
+use Stackin\Br\Decimals;
+use Stackin\Br\Intermediary;
+use Stackin\Br\Payment;
 use Stackin\Br\Product;
+use Stackin\Br\Transport;
 use Stackin\Errors\ApiError;
 use Stackin\Errors\ConnectionFailedError;
 use Stackin\Errors\InvoiceError;
@@ -152,9 +156,28 @@ final class Invoice extends Client
         return $value === null ? null : rtrim(rtrim(number_format($value, 10, '.', ''), '0'), '.');
     }
 
+    private const PRESENCES = ['0', '1', '2', '3', '4', '5', '9'];
+
+    /**
+     * @param Payment[] $payments
+     * @return array<int, array<string, mixed>>
+     */
+    private static function paymentsPayload(array $payments): array
+    {
+        if ($payments === [] || count($payments) > 100) {
+            throw new InvoiceError('payments takes 1 to 100 entries');
+        }
+
+        return array_map(
+            static fn (Payment $payment): array => $payment->toArray(),
+            array_values($payments),
+        );
+    }
+
     /**
      * @param Product[] $items
      * @param string[]|null $referencedKeys
+     * @param Payment[]|null $payments
      * @return array<string, mixed>
      */
     private static function issuePayload(
@@ -178,9 +201,19 @@ final class Invoice extends Client
         bool $contingency,
         ?string $clientEmail,
         ?string $clientPhone,
+        ?string $presence = null,
+        ?Intermediary $intermediary = null,
+        ?Transport $transport = null,
+        ?array $payments = null,
+        float|string|null $change = null,
     ): array {
         if ($items === []) {
             throw new InvoiceError("items can't be empty");
+        }
+        if ($presence !== null && !in_array($presence, self::PRESENCES, true)) {
+            throw new InvoiceError(
+                "presence must be one of 0, 1, 2, 3, 4, 5 or 9, got '{$presence}'",
+            );
         }
 
         $fromClient = $clientId !== null;
@@ -258,6 +291,11 @@ final class Invoice extends Client
             'contingency' => $contingency ? true : null,
             'client_email' => $clientEmail,
             'client_phone' => $clientPhone,
+            'presence' => $presence,
+            'intermediary' => $intermediary?->toArray(),
+            'transport' => $transport?->toArray(),
+            'payments' => $payments === null ? null : self::paymentsPayload($payments),
+            'change' => Decimals::optional($change, 'change', 2),
         ];
         foreach ($optional as $key => $value) {
             if ($value !== null) {
@@ -326,8 +364,20 @@ final class Invoice extends Client
      * authorizer (SVC-AN/SVC-RS, tpEmis 6/7) for when its own is down.
      * Left false, it is not sent.
      *
+     * NF-e only, each left out of the request when null: $presence says how
+     * the buyer took part ("0" not applicable, "1" in person, "2" internet,
+     * "3" telephone, "5" in person outside the establishment, "9" other;
+     * the API writes 9 when left out), $intermediary the marketplace the
+     * sale went through, $transport the freight mode and volumes,
+     * $payments the 1 to 100 payments and $change what they exceed the
+     * total by. Only the fixed rules are checked here (code sets, a
+     * description on method "99"); the fiscal rules between
+     * them are the API's, answered by name. The API refuses all of them on
+     * an NFS-e.
+     *
      * @param Product[] $items
      * @param string[]|null $referencedKeys
+     * @param Payment[]|null $payments
      * @return array<string, mixed>
      */
     public function issue(
@@ -353,6 +403,11 @@ final class Invoice extends Client
         bool $contingency = false,
         ?string $clientEmail = null,
         ?string $clientPhone = null,
+        ?string $presence = null,
+        ?Intermediary $intermediary = null,
+        ?Transport $transport = null,
+        ?array $payments = null,
+        float|string|null $change = null,
     ): array {
         $payload = self::issuePayload(
             $documentType,
@@ -375,6 +430,11 @@ final class Invoice extends Client
             $contingency,
             $clientEmail,
             $clientPhone,
+            $presence,
+            $intermediary,
+            $transport,
+            $payments,
+            $change,
         );
 
         return $this->request(
@@ -396,8 +456,11 @@ final class Invoice extends Client
      * API cannot read (an invalid field, an unknown client or item, a
      * credential or rate limit refusal) still throws ApiError.
      *
+     * Takes every argument issue() does, the sale terms included.
+     *
      * @param Product[] $items
      * @param string[]|null $referencedKeys
+     * @param Payment[]|null $payments
      */
     public function validate(
         DocumentType $documentType,
@@ -421,6 +484,11 @@ final class Invoice extends Client
         bool $contingency = false,
         ?string $clientEmail = null,
         ?string $clientPhone = null,
+        ?string $presence = null,
+        ?Intermediary $intermediary = null,
+        ?Transport $transport = null,
+        ?array $payments = null,
+        float|string|null $change = null,
     ): ValidationResult {
         $payload = self::issuePayload(
             $documentType,
@@ -443,6 +511,11 @@ final class Invoice extends Client
             $contingency,
             $clientEmail,
             $clientPhone,
+            $presence,
+            $intermediary,
+            $transport,
+            $payments,
+            $change,
         );
 
         try {

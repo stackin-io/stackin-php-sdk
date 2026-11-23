@@ -592,6 +592,14 @@ $clients->reactivate($acme['id']);
   there (422) until it is reactivated.
 - `updateClient: true` on `issue()` rewrites an existing client with that request's
   recipient data. Left false, the issuance only counts one more use of it.
+- NF-e sale terms on `issue()` and `validate()`, each left out of the body when null:
+  `presence` ("0" to "5", "9"), `intermediary` (`Br\Intermediary(taxId, identifier)`),
+  `transport` (`Br\Transport(freightMode, volumes)` of `Br\TransportVolume`), `payments`
+  (a list of `Br\Payment(method, amount, description, card)` with `Br\PaymentCard`) and
+  `change`. Product `netWeight`/`grossWeight` and the same two on `Items::upsert()`, with
+  `ibsCbsCst`/`ibsCbsClass`. An empty `volumes` list is sent as `[]`. The SDK checks code
+  sets, weights >= 0 and a description on method "99"; the API answers the fiscal rules.
+  `reissue()` takes none of them and reuses the stored terms.
 - `clientEmail` and `clientPhone` on `issue()` are contact data for the client, also kept on
   the invoice and sent again on a reissue (which does not touch the client). They are
   written into the fiscal document: NF-e `dest/email` (up to 60 characters) and
