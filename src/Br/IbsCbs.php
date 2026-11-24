@@ -24,9 +24,21 @@ use Stackin\Errors\InvoiceError;
  * the cClassTrib's pRedIBS and pRedCBS in the official classification
  * table. The API asks for them on CST 011, 200 and 515 and refuses them on
  * any other. Every optional field is left off the request when null.
+ *
+ * The rest are NFS-e only: `personalUse` (indFinal), `government` (tpOper and
+ * tpEnteGov), `referencedNfse` (gRefNFSe, 1 to 99 access keys), `recipient`
+ * (dest), `realEstate` (imovel), `movableGoods` (bensMoveis, 1 to 1000),
+ * `regularTaxation` (gTribRegular), `deferral` (gDif) and `presumedCredit`
+ * (cCredPres, two digits).
  */
 final class IbsCbs
 {
+    /** @var list<string>|null */
+    private readonly ?array $checkedKeys;
+
+    /** @var list<MovableGood>|null */
+    private readonly ?array $checkedGoods;
+
     public function __construct(
         public readonly string $cst,
         public readonly string $classification,
@@ -37,16 +49,64 @@ final class IbsCbs
         public readonly ?float $reductionIbs = null,
         public readonly ?float $reductionCbs = null,
         public readonly ?string $operationIndicator = null,
+        public readonly ?bool $personalUse = null,
+        public readonly ?IbsCbsGovernment $government = null,
+        /** @var list<string>|null */
+        public readonly ?array $referencedNfse = null,
+        public readonly ?IbsCbsRecipient $recipient = null,
+        public readonly ?RealEstate $realEstate = null,
+        /** @var list<MovableGood>|null */
+        public readonly ?array $movableGoods = null,
+        public readonly ?IbsCbsRegularTaxation $regularTaxation = null,
+        public readonly ?IbsCbsDeferral $deferral = null,
+        public readonly ?string $presumedCredit = null,
     ) {
         if ($operationIndicator !== null && preg_match('/^\d{6}$/', $operationIndicator) !== 1) {
             throw new InvoiceError('operationIndicator must be 6 digits');
         }
+        Check::pattern(
+            $presumedCredit,
+            'ibs_cbs.presumed_credit',
+            '/^\d{2}$/',
+            '2 digits',
+        );
+        $this->checkedKeys = $referencedNfse === null || $referencedNfse === []
+            ? null
+            : self::keys($referencedNfse);
+        $this->checkedGoods = Check::objects(
+            $movableGoods,
+            'ibs_cbs.movable_goods',
+            1000,
+            MovableGood::class,
+        );
+    }
+
+    /**
+     * @param array<array-key, mixed> $keys
+     * @return list<string>
+     */
+    private static function keys(array $keys): array
+    {
+        if (count($keys) > 99) {
+            Check::fail('ibs_cbs.referenced_nfse', 'takes 1 to 99 access keys');
+        }
+        $list = [];
+        foreach (array_values($keys) as $index => $key) {
+            $list[] = Check::requiredPattern(
+                is_string($key) ? $key : null,
+                "ibs_cbs.referenced_nfse[{$index}]",
+                '/^[0-9]{6}[0-9A-Z]{14}[0-9]{30}$/',
+                'the 50-character access key of an NFS-e',
+            );
+        }
+
+        return $list;
     }
 
     /**
      * Returns the group as a plain array, in the API's snake_case.
      *
-     * @return array<string, string|float>
+     * @return array<string, mixed>
      */
     public function toArray(): array
     {
@@ -61,8 +121,17 @@ final class IbsCbs
                 'reduction_ibs' => $this->reductionIbs,
                 'reduction_cbs' => $this->reductionCbs,
                 'operation_indicator' => $this->operationIndicator,
+                'personal_use' => $this->personalUse,
+                'government' => $this->government?->toArray(),
+                'referenced_nfse' => $this->checkedKeys,
+                'recipient' => $this->recipient?->toArray(),
+                'real_estate' => $this->realEstate?->toArray(),
+                'movable_goods' => Check::arrays($this->checkedGoods),
+                'regular_taxation' => $this->regularTaxation?->toArray(),
+                'deferral' => $this->deferral?->toArray(),
+                'presumed_credit' => $this->presumedCredit,
             ],
-            static fn (string|float|null $value): bool => $value !== null,
+            static fn (mixed $value): bool => $value !== null,
         );
     }
 }

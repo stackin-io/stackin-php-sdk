@@ -7,8 +7,10 @@ namespace Stackin;
 use DateTimeInterface;
 use GuzzleHttp\Client as HttpClient;
 use GuzzleHttp\Exception\GuzzleException;
+use Stackin\Br\Check;
 use Stackin\Br\Decimals;
 use Stackin\Br\Intermediary;
+use Stackin\Br\NfseDetails;
 use Stackin\Br\Payment;
 use Stackin\Br\Product;
 use Stackin\Br\Transport;
@@ -175,6 +177,15 @@ final class Invoice extends Client
     }
 
     /**
+     * @param array<string, mixed> $group
+     * @return array<string, mixed>|null
+     */
+    private static function nonEmpty(array $group): ?array
+    {
+        return $group === [] ? null : $group;
+    }
+
+    /**
      * @param Product[] $items
      * @param string[]|null $referencedKeys
      * @param Payment[]|null $payments
@@ -206,7 +217,22 @@ final class Invoice extends Client
         ?Transport $transport = null,
         ?array $payments = null,
         float|string|null $change = null,
+        ?string $recipientMunicipalRegistration = null,
+        ?int $foreignIdMissingReason = null,
+        ?NfseDetails $nfse = null,
     ): array {
+        $registration = Check::pattern(
+            Check::unmask($recipientMunicipalRegistration),
+            'recipientMunicipalRegistration',
+            '/^[A-Za-z0-9]{1,15}$/',
+            'up to 15 letters or digits',
+        );
+        if ($foreignIdMissingReason !== null && !in_array($foreignIdMissingReason, [1, 2], true)) {
+            throw new InvoiceError(
+                'foreignIdMissingReason takes 1 (exempt from a NIF) or 2 '
+                . '(the country does not require one); 0 is refused',
+            );
+        }
         if ($items === []) {
             throw new InvoiceError("items can't be empty");
         }
@@ -296,6 +322,9 @@ final class Invoice extends Client
             'transport' => $transport?->toArray(),
             'payments' => $payments === null ? null : self::paymentsPayload($payments),
             'change' => Decimals::optional($change, 'change', 2),
+            'recipient_municipal_registration' => $registration,
+            'foreign_id_missing_reason' => $foreignIdMissingReason,
+            'nfse' => $nfse === null ? null : self::nonEmpty($nfse->toArray()),
         ];
         foreach ($optional as $key => $value) {
             if ($value !== null) {
@@ -382,6 +411,14 @@ final class Invoice extends Client
      * them are the API's, answered by name. The API refuses all of them on
      * an NFS-e.
      *
+     * NFS-e only, each left out of the request when null:
+     * $recipientMunicipalRegistration is the tomador's inscrição municipal
+     * (toma/IM, up to 15 letters or digits, masks dropped),
+     * $foreignIdMissingReason is cNaoNIF for a tomador abroad without a
+     * $foreignId (1 exempt from a NIF, 2 the country does not require one),
+     * and $nfse holds the document-level groups (see NfseDetails). The API
+     * refuses all of them on an NF-e.
+     *
      * @param Product[] $items
      * @param string[]|null $referencedKeys
      * @param Payment[]|null $payments
@@ -416,6 +453,9 @@ final class Invoice extends Client
         ?array $payments = null,
         float|string|null $change = null,
         ?string $acceptLanguage = null,
+        ?string $recipientMunicipalRegistration = null,
+        ?int $foreignIdMissingReason = null,
+        ?NfseDetails $nfse = null,
     ): array {
         $payload = self::issuePayload(
             $documentType,
@@ -443,6 +483,9 @@ final class Invoice extends Client
             $transport,
             $payments,
             $change,
+            $recipientMunicipalRegistration,
+            $foreignIdMissingReason,
+            $nfse,
         );
 
         $body = $this->send(
@@ -510,6 +553,9 @@ final class Invoice extends Client
         ?array $payments = null,
         float|string|null $change = null,
         ?string $acceptLanguage = null,
+        ?string $recipientMunicipalRegistration = null,
+        ?int $foreignIdMissingReason = null,
+        ?NfseDetails $nfse = null,
     ): ValidationResult {
         $payload = self::issuePayload(
             $documentType,
@@ -537,6 +583,9 @@ final class Invoice extends Client
             $transport,
             $payments,
             $change,
+            $recipientMunicipalRegistration,
+            $foreignIdMissingReason,
+            $nfse,
         );
 
         try {
