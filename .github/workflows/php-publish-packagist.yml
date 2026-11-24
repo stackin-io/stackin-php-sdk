@@ -15,12 +15,14 @@ name: 📦 Package Packagist
 # than of the tagged tree.
 
 on:
-  release:
-    types: [published]
   workflow_dispatch:
     inputs:
-      tag:
-        description: Tag to verify, e.g. v0.3.0
+      version:
+        description: The release to publish, without the v prefix
+        required: true
+        type: string
+      registry:
+        description: packagist
         required: true
         type: string
 
@@ -41,7 +43,7 @@ jobs:
       - name: 🔍 Extract version from tag
         id: version
         run: |
-          TAG="${{ github.event.release.tag_name || inputs.tag }}"
+          TAG="v${{ inputs.version }}"
 
           if ! printf '%s' "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
             echo "::error::Packagist needs a semver tag prefixed with v, got $TAG."
