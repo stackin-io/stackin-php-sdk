@@ -60,6 +60,11 @@ final class Company extends Client
      * refused here, before the call. Null values are left out, and a call
      * with nothing changes nothing and answers the company as it is.
      *
+     * $blockActivityMismatch (owner only) true makes the API refuse an
+     * issuance with MEI_ACTIVITY_NOT_ALLOWED or ACTIVITY_NOT_REGISTERED as a
+     * 422 instead of a warning; false turns it back off. It is sent only when
+     * not null.
+     *
      * Returns every readiness() field plus address and fiscal_fields as
      * stored, so it says whether the company can issue now.
      *
@@ -71,8 +76,13 @@ final class Company extends Client
         ?array $address = null,
         ?array $fiscalFields = null,
         ?string $company = null,
+        ?bool $blockActivityMismatch = null,
     ): array {
         $payload = [];
+
+        if ($blockActivityMismatch !== null) {
+            $payload['block_activity_mismatch'] = $blockActivityMismatch;
+        }
 
         $address = self::group('address', $address, self::ADDRESS_KEYS);
         if ($address !== []) {
