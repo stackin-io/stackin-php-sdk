@@ -23,9 +23,15 @@ use Stackin\Errors\InvoiceError;
  * `countryIso2` (ISO 3166 alpha-2, never BR), `postalCode` (up to 11
  * characters) and `province` (up to 60) are the address of an NFS-e tomador
  * abroad (`state` EX), NFS-e only.
+ *
+ * `stateRegistration` is the recipient's IE, NF-e only: 2 to 14 digits for an
+ * ICMS contributor, `ISENTO` for an exempt one, left out for a
+ * non-contributor. Spaces, dots, dashes and slashes are dropped.
  */
 final class Address
 {
+    public readonly ?string $stateRegistration;
+
     public function __construct(
         public readonly ?string $state = null,
         public readonly ?string $cityCode = null,
@@ -40,6 +46,7 @@ final class Address
         public readonly ?string $countryIso2 = null,
         public readonly ?string $postalCode = null,
         public readonly ?string $province = null,
+        ?string $stateRegistration = null,
     ) {
         foreach (['street' => $street, 'neighborhood' => $neighborhood] as $field => $value) {
             if ($value !== null && $value !== '' && mb_strlen(trim($value)) < 2) {
@@ -55,6 +62,7 @@ final class Address
         if ($province !== null && mb_strlen($province) > 60) {
             throw new InvoiceError('province must be at most 60 characters');
         }
+        $this->stateRegistration = self::cleanStateRegistration($stateRegistration);
     }
 
     /**
@@ -76,6 +84,7 @@ final class Address
             'country_iso2' => $this->countryIso2,
             'postal_code' => $this->postalCode,
             'province' => $this->province,
+            'state_registration' => $this->stateRegistration,
         ];
 
         return array_filter($data, static fn (?string $value): bool => $value !== null);
@@ -87,5 +96,18 @@ final class Address
     public function isAbroad(): bool
     {
         return $this->state !== null && strtoupper($this->state) === 'EX';
+    }
+
+    private static function cleanStateRegistration(?string $value): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+        $cleaned = strtoupper((string) preg_replace('/[\s.\/-]/', '', $value));
+        if ($cleaned !== 'ISENTO' && preg_match('/^[0-9]{2,14}$/', $cleaned) !== 1) {
+            throw new InvoiceError('stateRegistration takes 2 to 14 digits, or ISENTO');
+        }
+
+        return $cleaned;
     }
 }
