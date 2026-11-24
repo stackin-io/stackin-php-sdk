@@ -380,7 +380,11 @@ now. `$address` takes `street`, `number`, `neighborhood`, `municipality_code`,
 `municipality_name` and `zip_code` — no `complement`, and `state` changes only in the
 dashboard. `$fiscalFields` takes `tax_regime` (1-4), `simples_nacional` (1-3),
 `simples_apuracao` (1-3), `simples_apuracao_ibs_cbs` (1 or 3), `state_registration` and
-`service_code`, and anyone but the
+`service_code`, plus the NFS-e settings `approximate_tax_simples_percent`,
+`approximate_tax_federal_percent`, `approximate_tax_state_percent`,
+`approximate_tax_municipal_percent`, `iss_rate`, `municipal_registration` and
+`special_tax_regime` (percentages with two decimals, a comma accepted; an empty string
+clears one of these seven). Anyone but the
 owner gets an `ApiError` 403. Unknown keys and malformed codes are an `InvoiceError`
 before the call; an OAuth credential needs `company:write`. A 503 means the IBGE
 table could not be read: nothing changed, retry after `Retry-After`.
@@ -415,6 +419,73 @@ header only, never in the body, and is left out when unset. `nbs` is the NFS-e s
 NBS code (nine digits or dotted), sent on the line beside `serviceCode`; the API requires
 it on a line that carries `ibsCbs` and refuses an unknown code, both as an `ApiError`.
 Catalog items take `nbs` too (`$items->upsert(..., nbs: '115021000')`).
+
+`$reference->nbsSuggestions('1.07')` (`GET /service-codes/{service_code}/nbs`, on
+`FiscalReference`) lists the NBS codes NFS-e Anexo VIII pairs with a service code, in any
+form `serviceCode` takes (`1.07`, `01.07.00`, `010700`). It answers an `NbsSuggestions`
+with `serviceCode`, `suggestions` (each an `NbsSuggestion`: `nbs`, `description`,
+`operationIndicator` (cIndOp), `ibsCbsClassification` (cClassTrib) and
+`classificationName`, null where the annex lists none) and `source`. They are suggestions
+only: nothing is written into a document unless you send them as the line's `nbs` and its
+`ibsCbs`. A code the route cannot read is an `ApiError` 422.
+
+```php
+$found = (new FiscalReference(apiKey: getenv('STACKIN_API_KEY')))->nbsSuggestions('1.07');
+foreach ($found->suggestions as $row) {
+    echo $row->nbs, ' ', $row->operationIndicator, ' ', $row->ibsCbsClassification, "\n";
+}
+```
+
+### NFS-e fields of the DPS
+
+All optional, NFS-e only (the API refuses them on an NF-e) and left out of the request when
+null. Decimals go out as decimal strings and dates as `YYYY-MM-DD` (a `DateTimeInterface`
+or the string).
+
+- On a line (`Product`): `nbs`, `conditionalDiscount` (BRL, above 0), `municipalServiceCode`
+  (3 digits; refused for an MEI) and `internalCode` (up to 20 letters or digits). `IbsCbs`
+  also takes `personalUse`, `government`, `referencedNfse`, `recipient`, `realEstate`,
+  `movableGoods`, `regularTaxation`, `deferral` and `presumedCredit`.
+- On `issue()` and `validate()`: `recipientMunicipalRegistration` (up to 15 letters or
+  digits, masks dropped), `foreignIdMissingReason` (1 or 2) and, on `Address`, `complement`
+  and, for a tomador abroad, `countryIso2`, `postalCode` and `province`.
+- `nfse:` a `NfseDetails` with `approximateTaxes`, `competenceDate`, `serviceCityCode` or
+  `serviceCountryCode`, `iss`, `federal`, `deductions`, `substitution`, `construction`,
+  `event`, `references`, `intermediary` and `foreignTrade`. A `PersonAddress` is the address
+  of a deduction supplier and of the intermediary.
+
+```php
+$invoice->issue(
+    DocumentType::NFSE,
+    'Maria Silva',
+    '12345678909',
+    [new Product(description: 'Consultoria', unitPrice: 1500.00, serviceCode: '1.07')],
+    nfse: new NfseDetails(
+        competenceDate: new DateTimeImmutable('2026-11-20'),
+        serviceCityCode: '3550308',
+        approximateTaxes: new ApproximateTaxes(
+            federalPercent: 13.45,
+            statePercent: 0.0,
+            municipalPercent: 2.0,
+        ),
+        iss: new IssDetails(rate: 2.5, retention: 'tomador'),
+    ),
+);
+```
+
+The API refuses some groups for an MEI: `deductions` (`DEDUCTIONS_NOT_FOR_MEI`), `federal`
+(`FEDERAL_TAXES_NOT_FOR_MEI`), `iss.rate`, a retention and `municipalServiceCode`. An NFS-e
+takes one line: more than one is a 422 `NFSE_SINGLE_ITEM`. Findings the API lets through
+come back in the `warnings` of the result: `APPROXIMATE_TAXES_MISSING`,
+`IBS_CBS_RECOMMENDED`, `RECIPIENT_COMPLEMENT_OMITTED`, `CONSTRUCTION_RECOMMENDED`,
+`EVENT_RECOMMENDED` and `FOREIGN_TRADE_RECOMMENDED`. The invoice detail returns the stored
+`nfse` and `substituted_by_invoice_id`.
+
+The shapes the API fixes (patterns, lengths, enumerations, ranges, decimal places and the
+groups that take exactly one of several members) are checked when each group is built and
+raise an `InvoiceError` naming the field. What depends on the company, the service code or
+the environment is the API's and comes back by name. The company's own defaults are the
+`Company::update()` settings above; a group sent in `nfse` overrides them for that document.
 
 ## Suggesting a classification
 

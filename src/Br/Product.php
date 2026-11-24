@@ -40,6 +40,11 @@ use Stackin\Errors\InvoiceError;
  * the line beside `serviceCode`. The API requires it on a line that carries
  * `ibsCbs` and checks the code; it is left out when null.
  *
+ * `municipalServiceCode` is the cTribMun, three digits, which the API refuses
+ * for an MEI; `internalCode` is the cIntContrib, up to 20 letters or digits;
+ * `conditionalDiscount` is the vDescCond in BRL, above 0 with at most 2
+ * decimal places. All three are NFS-e only and left out when null.
+ *
  * `ibsCbs` is the IBS/CBS group, sent under `br.ibs_cbs`: an `IbsCbs`, or
  * the same keys as a plain array.
  */
@@ -87,9 +92,32 @@ final class Product
         public readonly float|string|null $netWeight = null,
         public readonly float|string|null $grossWeight = null,
         public readonly ?string $nbs = null,
+        public readonly ?string $municipalServiceCode = null,
+        public readonly ?string $internalCode = null,
+        public readonly float|string|null $conditionalDiscount = null,
     ) {
         Decimals::optional($netWeight, 'netWeight');
         Decimals::optional($grossWeight, 'grossWeight');
+        Check::pattern(
+            $municipalServiceCode,
+            'municipalServiceCode',
+            '/^\d{3}$/',
+            '3 digits',
+        );
+        Check::pattern(
+            $internalCode,
+            'internalCode',
+            '/^[A-Za-z0-9]{1,20}$/',
+            '1 to 20 letters or digits',
+        );
+        Check::decimal(
+            $conditionalDiscount,
+            'conditionalDiscount',
+            0,
+            true,
+            999999999999999.99,
+            2,
+        );
         if ($description === null && $itemId === null) {
             throw new InvoiceError('description is required unless itemId is given');
         }
@@ -263,7 +291,17 @@ final class Product
                 'product' => $data,
                 'service_code' => $this->serviceCode,
                 'nbs' => $this->nbs,
+                'municipal_service_code' => $this->municipalServiceCode,
+                'internal_code' => $this->internalCode,
                 'discount' => $this->serviceDiscount,
+                'conditional_discount' => Check::decimal(
+                    $this->conditionalDiscount,
+                    'conditionalDiscount',
+                    0,
+                    true,
+                    999999999999999.99,
+                    2,
+                ),
                 'observations' => $this->observations,
             ],
             static fn (mixed $value): bool => $value !== null,

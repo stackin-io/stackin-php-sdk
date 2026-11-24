@@ -17,6 +17,12 @@ use Stackin\Errors\InvoiceError;
  * be left out, and `countryCode` (the BACEN code, 1 to 4 digits, not
  * 1058) with `countryName` name the country. The BACEN check digit is not
  * checked: the official table has countries whose digit does not close.
+ *
+ * `complement` is the apartment, suite or block (xCpl); one too long for the
+ * layout is left out by the API with the warning RECIPIENT_COMPLEMENT_OMITTED.
+ * `countryIso2` (ISO 3166 alpha-2, never BR), `postalCode` (up to 11
+ * characters) and `province` (up to 60) are the address of an NFS-e tomador
+ * abroad (`state` EX), NFS-e only.
  */
 final class Address
 {
@@ -30,11 +36,24 @@ final class Address
         public readonly ?string $zipCode = null,
         public readonly ?string $countryCode = null,
         public readonly ?string $countryName = null,
+        public readonly ?string $complement = null,
+        public readonly ?string $countryIso2 = null,
+        public readonly ?string $postalCode = null,
+        public readonly ?string $province = null,
     ) {
         foreach (['street' => $street, 'neighborhood' => $neighborhood] as $field => $value) {
             if ($value !== null && $value !== '' && mb_strlen(trim($value)) < 2) {
                 throw new InvoiceError("{$field} must have at least 2 characters");
             }
+        }
+        if ($countryIso2 !== null && preg_match('/^[A-Z]{2}$/', $countryIso2) !== 1) {
+            throw new InvoiceError('countryIso2 must be an ISO 3166 alpha-2 code');
+        }
+        if ($postalCode !== null && mb_strlen($postalCode) > 11) {
+            throw new InvoiceError('postalCode must be at most 11 characters');
+        }
+        if ($province !== null && mb_strlen($province) > 60) {
+            throw new InvoiceError('province must be at most 60 characters');
         }
     }
 
@@ -53,6 +72,10 @@ final class Address
             'zip_code' => $this->zipCode,
             'country_code' => $this->countryCode,
             'country_name' => $this->countryName,
+            'complement' => $this->complement,
+            'country_iso2' => $this->countryIso2,
+            'postal_code' => $this->postalCode,
+            'province' => $this->province,
         ];
 
         return array_filter($data, static fn (?string $value): bool => $value !== null);

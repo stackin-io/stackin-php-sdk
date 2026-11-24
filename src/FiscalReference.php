@@ -172,6 +172,31 @@ final class FiscalReference extends Client
     }
 
     /**
+     * Suggests the NBS codes NFS-e Anexo VIII correlates with a service code
+     * (GET /service-codes/{service_code}/nbs), in any form the line's
+     * serviceCode takes: '1.07', '01.07.00' or '010700'. Only its LC 116
+     * subitem decides the answer.
+     *
+     * Each row also carries the operationIndicator (cIndOp) and
+     * ibsCbsClassification (cClassTrib) the annex pairs with that NBS. They
+     * are suggestions only: nothing is written into a document unless they
+     * are sent as the line's nbs and its ibsCbs. A code the route cannot read
+     * is an ApiError 422.
+     */
+    public function nbsSuggestions(string $serviceCode, ?string $company = null): NbsSuggestions
+    {
+        if (mb_strlen($serviceCode) > 12) {
+            throw new InvoiceError('serviceCode must be at most 12 characters');
+        }
+
+        return NbsSuggestions::fromArray($this->request(
+            'GET',
+            '/service-codes/' . self::segment($serviceCode) . '/nbs',
+            company: $company,
+        ));
+    }
+
+    /**
      * Simulates the IBS and CBS of the items, with no document issued or
      * stored (POST /ibs-cbs/calculate).
      *
