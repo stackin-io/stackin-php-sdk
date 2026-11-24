@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.27.0 — 2026-11-24
+
+### Features
+- **nfse:** DPS fields on the issuance request #57
+- **company:** NFS-e settings in fiscal fields #57
+- **reference:** nbsSuggestions for a service code #57
+
+### Docs
+- **readme:** document the NFS-e DPS fields and nbsSuggestions #57
+
+### Tests
+- **nfse:** cover DPS fields, company settings and NBS suggestions #57
+
 ## v0.26.0 — 2026-11-24
 
 ### Features
