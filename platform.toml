@@ -2,6 +2,7 @@
 name = "stackin-php-sdk"
 type = "library"
 language = "php"
+ci = "github"
 
 [source_host]
 kind = "github"
@@ -10,3 +11,17 @@ repo = "stackin-io/stackin-php-sdk"
 [release]
 strategy = "semver"
 changelog = "conventional"
+
+[[scopes]]
+name = "prod"
+kind = "library"
+criticality = "high"
+
+[[deploy.targets]]
+name = "packagist"
+kind = "packagist"
+run_by = "github_actions"
+observe = true
+workflow = "php-publish-packagist.yml"
+stages = ["prod"]
+package = "stackin-io/stackin-php-sdk"
