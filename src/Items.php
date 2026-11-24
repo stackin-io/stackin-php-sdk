@@ -93,7 +93,8 @@ final class Items extends Client
      * $netWeight and $grossWeight (kg per unit, up to 6 places) are for a
      * product and fill the issuance line's weights. $ibsCbsCst (3 digits)
      * and $ibsCbsClass (cClassTrib, 6 digits) go together and fill the
-     * line's IBS/CBS group when it sends one without them.
+     * line's IBS/CBS group when it sends one without them. $nbs (nine digits
+     * or dotted) is the service's NBS code and fills the NFS-e line's.
      */
     public function upsert(
         string $kind,
@@ -117,6 +118,7 @@ final class Items extends Client
         ?string $ibsCbsCst = null,
         ?string $ibsCbsClass = null,
         ?string $company = null,
+        ?string $nbs = null,
     ): ItemSaved {
         $fields = [
             'kind' => $kind,
@@ -139,6 +141,7 @@ final class Items extends Client
             'gross_weight' => Decimals::optional($grossWeight, 'grossWeight', 6),
             'ibs_cbs_cst' => $ibsCbsCst,
             'ibs_cbs_class' => $ibsCbsClass,
+            'nbs' => $nbs,
         ];
         $payload = array_filter($fields, static fn (mixed $value): bool => $value !== null);
 
@@ -179,6 +182,7 @@ final class Items extends Client
         ?string $ibsCbsCst = null,
         ?string $ibsCbsClass = null,
         ?string $company = null,
+        ?string $nbs = null,
     ): array {
         return $this->upsert(
             $kind,
@@ -202,6 +206,7 @@ final class Items extends Client
             $ibsCbsCst,
             $ibsCbsClass,
             $company,
+            $nbs,
         )->item;
     }
 
@@ -209,7 +214,7 @@ final class Items extends Client
      * Changes only the fields in $changes, keyed by their API names: kind,
      * description, code, unit_price, unit, external_reference, notes, ncm,
      * cfop, tax_situation, origin, cest, gtin, service_code, iss_retained,
-     * net_weight, gross_weight, ibs_cbs_cst, ibs_cbs_class,
+     * net_weight, gross_weight, ibs_cbs_cst, ibs_cbs_class, nbs,
      * is_active. A null value clears the field.
      *
      * The API checks the item as a whole, so turning a product into a

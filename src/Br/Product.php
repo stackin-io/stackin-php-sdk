@@ -36,6 +36,10 @@ use Stackin\Errors\InvoiceError;
  * under `product`; they fill the volume the API derives when `transport`
  * carries none.
  *
+ * `nbs` is the NBS code of an NFS-e service (nine digits or dotted), sent on
+ * the line beside `serviceCode`. The API requires it on a line that carries
+ * `ibsCbs` and checks the code; it is left out when null.
+ *
  * `ibsCbs` is the IBS/CBS group, sent under `br.ibs_cbs`: an `IbsCbs`, or
  * the same keys as a plain array.
  */
@@ -82,6 +86,7 @@ final class Product
         public readonly ?string $itemId = null,
         public readonly float|string|null $netWeight = null,
         public readonly float|string|null $grossWeight = null,
+        public readonly ?string $nbs = null,
     ) {
         Decimals::optional($netWeight, 'netWeight');
         Decimals::optional($grossWeight, 'grossWeight');
@@ -257,6 +262,7 @@ final class Product
                 'unit_price' => self::decimalString($this->unitPrice),
                 'product' => $data,
                 'service_code' => $this->serviceCode,
+                'nbs' => $this->nbs,
                 'discount' => $this->serviceDiscount,
                 'observations' => $this->observations,
             ],
