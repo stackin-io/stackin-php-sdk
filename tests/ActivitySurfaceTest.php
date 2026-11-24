@@ -131,6 +131,13 @@ final class ActivitySurfaceTest extends TestCase
         $this->assertFalse($this->sent[0]['request']->hasHeader('Accept-Language'));
     }
 
+    public function testAnEmptyAcceptLanguageIsTreatedAsUnset(): void
+    {
+        $this->issue(['result' => ['id' => '1']], acceptLanguage: '');
+
+        $this->assertFalse($this->sent[0]['request']->hasHeader('Accept-Language'));
+    }
+
     public function testValidateSendsAcceptLanguageAsAHeaderOnly(): void
     {
         $invoice = $this->wire(

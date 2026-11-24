@@ -249,7 +249,7 @@ abstract class Client
         if ($idempotencyKey !== null) {
             $headers['Idempotency-Key'] = $idempotencyKey;
         }
-        if ($acceptLanguage !== null) {
+        if ($acceptLanguage !== null && $acceptLanguage !== '') {
             $headers['Accept-Language'] = $acceptLanguage;
         }
         $company ??= $this->company;
