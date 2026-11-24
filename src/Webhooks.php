@@ -28,6 +28,10 @@ final class Webhooks extends Client
         'invoice.corrected',
         'received_invoice.stored',
         'received_invoice.full_document',
+        'integration.settings_changed',
+        'integration.order_retry',
+        'integration.order_issue',
+        'integration.catalog_sync',
     ];
 
     private const SECRET_MIN = 16;

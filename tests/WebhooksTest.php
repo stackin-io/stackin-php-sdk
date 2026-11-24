@@ -85,6 +85,25 @@ final class WebhooksTest extends TestCase
         $this->assertSame('wh_1', $endpoint['id']);
     }
 
+    public function testCreateAcceptsTheIntegrationEvents(): void
+    {
+        $events = [
+            'integration.settings_changed',
+            'integration.order_retry',
+            'integration.order_issue',
+            'integration.catalog_sync',
+        ];
+
+        $this->hooks(self::json(['id' => 'wh_1'], 201))
+            ->create('https://shop.example/stackin', self::SECRET, events: $events);
+
+        $this->assertSame([
+            'url' => 'https://shop.example/stackin',
+            'secret' => self::SECRET,
+            'events' => $events,
+        ], json_decode((string) $this->request()->getBody(), true));
+    }
+
     public function testCreateWithoutEventsLeavesThemOut(): void
     {
         $this->hooks(self::json(['id' => 'wh_1'], 201))
@@ -145,6 +164,10 @@ final class WebhooksTest extends TestCase
                 'invoice.corrected',
                 'received_invoice.stored',
                 'received_invoice.full_document',
+                'integration.settings_changed',
+                'integration.order_retry',
+                'integration.order_issue',
+                'integration.catalog_sync',
             ],
             Webhooks::EVENTS,
         );
