@@ -9,7 +9,7 @@ use DateTimeInterface;
 /**
  * One document behind the deduction (docDedRed, or docAjusteBC in the
  * homologation layout). Set exactly one of `nfseKey`, `nfeKey`, `cteKey`,
- * `municipalNfse`, `paperInvoice`, `fiscalDocument` and `otherDocument`.
+ * `municipalNfse`, `paperInvoice`, `fiscalDocument`, `otherDocument` and `otherDfe`.
  * `type` is the tpDedRed code: 1 to 9, 99, 101 to 105 or 199.
  */
 final class DeductionDocument
@@ -42,6 +42,8 @@ final class DeductionDocument
 
     public readonly ?DeductionSupplier $supplier;
 
+    public readonly ?OtherDfe $otherDfe;
+
     public function __construct(
         int $type,
         DateTimeInterface|string $issueDate,
@@ -57,6 +59,7 @@ final class DeductionDocument
         ?OtherDocument $otherDocument = null,
         DateTimeInterface|string|null $competenceDate = null,
         ?DeductionSupplier $supplier = null,
+        ?OtherDfe $otherDfe = null,
     ) {
         $this->type = Check::requiredInteger(
             $type,
@@ -113,6 +116,7 @@ final class DeductionDocument
             'nfse.deductions.documents.competence_date',
         );
         $this->supplier = $supplier;
+        $this->otherDfe = $otherDfe;
 
         $identified = Check::count(
             Check::has($this->nfseKey),
@@ -122,12 +126,13 @@ final class DeductionDocument
             $this->paperInvoice !== null,
             $this->fiscalDocument !== null,
             $this->otherDocument !== null,
+            $this->otherDfe !== null,
         );
         if ($identified !== 1) {
             Check::fail(
                 'nfse.deductions.documents',
                 'takes exactly one of nfse_key, nfe_key, cte_key, municipal_nfse, ' .
-                'paper_invoice, fiscal_document, other_document',
+                'paper_invoice, fiscal_document, other_document, other_dfe',
             );
         }
     }
@@ -152,6 +157,7 @@ final class DeductionDocument
             'other_document' => $this->otherDocument?->toArray(),
             'competence_date' => $this->competenceDate,
             'supplier' => $this->supplier?->toArray(),
+            'other_dfe' => $this->otherDfe?->toArray(),
         ]);
     }
 }

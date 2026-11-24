@@ -454,8 +454,11 @@ or the string).
   non-contributor; a number marks a contributor and `ISENTO` an exempt one.
 - `nfse:` a `NfseDetails` with `approximateTaxes`, `competenceDate`, `serviceCityCode` or
   `serviceCountryCode`, `iss`, `federal`, `deductions`, `substitution`, `construction`,
-  `event`, `references`, `intermediary` and `foreignTrade`. A `PersonAddress` is the address
-  of a deduction supplier and of the intermediary.
+  `event`, `references`, `provider` (`NfseProvider`: `caepf` of 14 digits, `phone`, `email`),
+  `recipientCaepf` (14 digits), `intermediary` and `foreignTrade`. A `PersonAddress` is the
+  address of a deduction supplier and of the intermediary. A deduction document also takes
+  `otherDfe` (`OtherDfe(key, description)`, key up to 50 characters) as one of its
+  identifications; the API reads it on the homologation layout only.
 
 ```php
 $invoice->issue(

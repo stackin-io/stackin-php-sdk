@@ -41,6 +41,10 @@ final class NfseDetails
 
     public readonly ?ForeignTrade $foreignTrade;
 
+    public readonly ?NfseProvider $provider;
+
+    public readonly ?string $recipientCaepf;
+
     public function __construct(
         ?ApproximateTaxes $approximateTaxes = null,
         DateTimeInterface|string|null $competenceDate = null,
@@ -55,6 +59,8 @@ final class NfseDetails
         ?References $references = null,
         ?NfseIntermediary $intermediary = null,
         ?ForeignTrade $foreignTrade = null,
+        ?NfseProvider $provider = null,
+        ?string $recipientCaepf = null,
     ) {
         $this->approximateTaxes = $approximateTaxes;
         $this->competenceDate = Check::day($competenceDate, 'nfse.competence_date');
@@ -79,6 +85,13 @@ final class NfseDetails
         $this->references = $references;
         $this->intermediary = $intermediary;
         $this->foreignTrade = $foreignTrade;
+        $this->provider = $provider;
+        $this->recipientCaepf = Check::pattern(
+            $recipientCaepf,
+            'nfse.recipient_caepf',
+            '/^\d{14}$/',
+            '14 digits',
+        );
 
         if (Check::has($this->serviceCityCode) && Check::has($this->serviceCountryCode)) {
             Check::fail('nfse', 'takes service_city_code or service_country_code, not both');
@@ -126,6 +139,8 @@ final class NfseDetails
             'references' => $this->references?->toArray(),
             'intermediary' => $this->intermediary?->toArray(),
             'foreign_trade' => $this->foreignTrade?->toArray(),
+            'provider' => $this->provider?->toArray(),
+            'recipient_caepf' => $this->recipientCaepf,
         ]);
     }
 }
