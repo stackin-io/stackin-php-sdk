@@ -176,8 +176,17 @@ abstract class Client
         ?array $query = null,
         ?string $idempotencyKey = null,
         ?string $company = null,
+        ?string $acceptLanguage = null,
     ): array {
-        $body = $this->send($method, $path, $json, $query, $idempotencyKey, $company);
+        $body = $this->send(
+            $method,
+            $path,
+            $json,
+            $query,
+            $idempotencyKey,
+            $company,
+            $acceptLanguage,
+        );
         $decoded = $body !== '' ? json_decode($body, true) : [];
         $decoded = is_array($decoded) ? $decoded : [];
 
@@ -195,8 +204,17 @@ abstract class Client
         ?array $query = null,
         ?string $idempotencyKey = null,
         ?string $company = null,
+        ?string $acceptLanguage = null,
     ): string {
-        return $this->sendWithStatus($method, $path, $json, $query, $idempotencyKey, $company)[1];
+        return $this->sendWithStatus(
+            $method,
+            $path,
+            $json,
+            $query,
+            $idempotencyKey,
+            $company,
+            $acceptLanguage,
+        )[1];
     }
 
     /**
@@ -214,6 +232,7 @@ abstract class Client
         ?array $query = null,
         ?string $idempotencyKey = null,
         ?string $company = null,
+        ?string $acceptLanguage = null,
     ): array {
         $url = "{$this->baseUrl}/api/v1{$path}";
         $options = [];
@@ -229,6 +248,9 @@ abstract class Client
         }
         if ($idempotencyKey !== null) {
             $headers['Idempotency-Key'] = $idempotencyKey;
+        }
+        if ($acceptLanguage !== null) {
+            $headers['Accept-Language'] = $acceptLanguage;
         }
         $company ??= $this->company;
         if ($company !== null && $company !== '') {

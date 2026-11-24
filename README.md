@@ -385,6 +385,37 @@ owner gets an `ApiError` 403. Unknown keys and malformed codes are an `InvoiceEr
 before the call; an OAuth credential needs `company:write`. A 503 means the IBGE
 table could not be read: nothing changed, retry after `Retry-After`.
 
+`update(blockActivityMismatch: true)` (owner only, a bool; `false` is sent too) makes the
+API refuse an issuance with `MEI_ACTIVITY_NOT_ALLOWED` or `ACTIVITY_NOT_REGISTERED` as a
+422 `ApiError` instead of a warning. It counts as a change by itself.
+
+### Activity warnings, `nbs` and `acceptLanguage`
+
+`issue()` returns the result array plus a `warnings` key: always a list, empty when
+there are none, each entry an array with `code` (`MEI_ACTIVITY_NOT_ALLOWED`,
+`ACTIVITY_NOT_REGISTERED`, `MEI_NO_ICMS_ACTIVITY`), `message` and `field` (`null` when
+the finding is not about one field). `reissue()` is unchanged.
+
+```php
+$result = $invoice->issue(
+    DocumentType::NFSE,
+    'Maria Silva',
+    '12345678909',
+    [new Product(description: 'Consultoria', unitPrice: 1500.00, nbs: '1.1502.10.00')],
+    acceptLanguage: 'pt-BR',
+);
+foreach ($result['warnings'] as $warning) {
+    echo $warning['code'], ': ', $warning['message'], "\n";
+}
+```
+
+`acceptLanguage` (`pt-BR`, `en` or `es`; the API falls back to English) localizes the
+warnings' `message` on `issue()` and `validate()`. It goes out as the `Accept-Language`
+header only, never in the body, and is left out when unset. `nbs` is the NFS-e service's
+NBS code (nine digits or dotted), sent on the line beside `serviceCode`; the API requires
+it on a line that carries `ibsCbs` and refuses an unknown code, both as an `ApiError`.
+Catalog items take `nbs` too (`$items->upsert(..., nbs: '115021000')`).
+
 ## Suggesting a classification
 
 ```php
@@ -405,7 +436,7 @@ would settle it; answer through `answers` and ask again. `description` is 3 to
 
 ### Dry run, and an NFS-e whose outcome is unknown
 
-`validate()` takes the arguments of `issue()` (no idempotency key) and runs the API's
+`validate()` takes the arguments of `issue()` (no idempotency key, `acceptLanguage` included) and runs the API's
 rules without transmitting, taking a number or charging. It answers a
 `ValidationResult` (`valid`, `errors`, `warnings`) both when the rules pass and when
 they fail; each finding has `code`, `message` and `field`, plus `sefaz_rejection`,

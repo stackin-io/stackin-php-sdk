@@ -360,6 +360,13 @@ final class Invoice extends Client
      * existing one only with $updateClient true, and only the ones sent.
      * Left out of the request when null.
      *
+     * The result carries a warnings key, always a list (empty when there are
+     * none): the activity findings the API let through, each an array with
+     * code, message and field (null when not about one field).
+     *
+     * $acceptLanguage (pt-BR, en or es) localizes those warnings' message
+     * and is sent as the Accept-Language header only, never in the body.
+     *
      * $contingency true sends an NF-e through the UF's contingency
      * authorizer (SVC-AN/SVC-RS, tpEmis 6/7) for when its own is down.
      * Left false, it is not sent.
@@ -408,6 +415,7 @@ final class Invoice extends Client
         ?Transport $transport = null,
         ?array $payments = null,
         float|string|null $change = null,
+        ?string $acceptLanguage = null,
     ): array {
         $payload = self::issuePayload(
             $documentType,
@@ -437,13 +445,24 @@ final class Invoice extends Client
             $change,
         );
 
-        return $this->request(
+        $body = $this->send(
             'POST',
             '/invoices',
-            json: $payload,
+            $payload,
             idempotencyKey: $idempotencyKey,
             company: $company,
+            acceptLanguage: $acceptLanguage,
         );
+        $decoded = $body !== '' ? json_decode($body, true) : [];
+        $decoded = is_array($decoded) ? $decoded : [];
+        $result = $decoded['result'] ?? $decoded;
+        $result = is_array($result) ? $result : [];
+        $warnings = $decoded['warnings'] ?? null;
+        $result['warnings'] = is_array($warnings)
+            ? array_values(array_filter($warnings, 'is_array'))
+            : [];
+
+        return $result;
     }
 
     /**
@@ -456,7 +475,8 @@ final class Invoice extends Client
      * API cannot read (an invalid field, an unknown client or item, a
      * credential or rate limit refusal) still throws ApiError.
      *
-     * Takes every argument issue() does, the sale terms included.
+     * Takes every argument issue() does, the sale terms included, and
+     * $acceptLanguage localizes the findings' message the same way.
      *
      * @param Product[] $items
      * @param string[]|null $referencedKeys
@@ -489,6 +509,7 @@ final class Invoice extends Client
         ?Transport $transport = null,
         ?array $payments = null,
         float|string|null $change = null,
+        ?string $acceptLanguage = null,
     ): ValidationResult {
         $payload = self::issuePayload(
             $documentType,
@@ -524,6 +545,7 @@ final class Invoice extends Client
                 '/invoices/validate',
                 json: $payload,
                 company: $company,
+                acceptLanguage: $acceptLanguage,
             );
         } catch (ApiError $error) {
             $body = $error->body;
