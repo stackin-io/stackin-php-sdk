@@ -36,6 +36,8 @@ use Stackin\Br\IssSuspension;
 use Stackin\Br\MovableGood;
 use Stackin\Br\NfseDetails;
 use Stackin\Br\NfseIntermediary;
+use Stackin\Br\NfseProvider;
+use Stackin\Br\OtherDfe;
 use Stackin\Br\OtherDocument;
 use Stackin\Br\PersonAddress;
 use Stackin\Br\PisCofins;
@@ -153,6 +155,8 @@ final class NfseFieldsTest extends TestCase
             construction: new Construction(workIdType: 'cib', workId: '12345678'),
             event: new Event('Show', '2026-11-02', '2026-11-03', eventId: 'EV1'),
             references: new References(orderNumber: 'PO-1', orderItems: ['a', 'b']),
+            provider: new NfseProvider('12345678901234', '+55 (11) 99999-0000', 'dps@example.com'),
+            recipientCaepf: '43210987654321',
             intermediary: new NfseIntermediary(
                 name: 'Broker',
                 foreignId: 'NIF1',
@@ -228,6 +232,12 @@ final class NfseFieldsTest extends TestCase
                     'state' => 'Lisboa',
                 ],
             ],
+            'provider' => [
+                'caepf' => '12345678901234',
+                'phone' => '+5511999990000',
+                'email' => 'dps@example.com',
+            ],
+            'recipient_caepf' => '43210987654321',
             'foreign_trade' => [
                 'service_mode' => 1,
                 'relationship' => 0,
@@ -240,6 +250,25 @@ final class NfseFieldsTest extends TestCase
                 'share_with_mdic' => true,
             ],
         ], $sent['nfse']);
+    }
+
+    public function testDeductionOtherDfeGoesOut(): void
+    {
+        $sent = $this->issue(['nfse' => new NfseDetails(deductions: new Deductions(documents: [
+            new DeductionDocument(
+                type: 99,
+                issueDate: '2026-11-01',
+                totalAmount: 50.0,
+                deductedAmount: 20.0,
+                description: 'outros',
+                otherDfe: new OtherDfe('ABC123', 'Fatura de energia'),
+            ),
+        ]))]);
+
+        $this->assertSame(
+            ['key' => 'ABC123', 'description' => 'Fatura de energia'],
+            $sent['nfse']['deductions']['documents'][0]['other_dfe'],
+        );
     }
 
     public function testNothingNewIsSentWhenNothingIsSet(): void
@@ -571,6 +600,37 @@ final class NfseFieldsTest extends TestCase
                     nfseKey: self::KEY,
                 ),
                 'other_document.number is required',
+            ],
+            'provider caepf' => [
+                fn () => new NfseProvider(caepf: '123'),
+                'caepf must be 14 digits',
+            ],
+            'provider phone' => [
+                fn () => new NfseProvider(phone: '12'),
+                'phone must be 8 to 15 digits',
+            ],
+            'provider email' => [
+                fn () => new NfseProvider(email: 'nope'),
+                'email must be an e-mail address',
+            ],
+            'recipient caepf' => [
+                fn () => new NfseDetails(recipientCaepf: '1234'),
+                'recipient_caepf must be 14 digits',
+            ],
+            'other dfe without description' => [
+                fn () => new OtherDfe('K', ''),
+                'other_dfe.description is required',
+            ],
+            'other dfe and nfse key' => [
+                fn () => new DeductionDocument(
+                    2,
+                    '2026-01-01',
+                    1,
+                    1,
+                    nfseKey: self::KEY,
+                    otherDfe: new OtherDfe('K', 'D'),
+                ),
+                'exactly one of nfse_key',
             ],
             'substitution key' => [fn () => new Substitution('12', '01'), 'access_key must be'],
             'substitution other' => [
