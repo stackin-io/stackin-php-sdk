@@ -1,19 +1,5 @@
 name: 📦 Package Packagist
 
-# Packagist resolves straight from the tag, so this does not upload a
-# build — it writes LAST_VERSION from the tag, runs the same tests and
-# lint the branch runs, and then tells Packagist to look.
-#
-# It used to *verify* LAST_VERSION instead, which made every release a
-# two-step ritual — bump, push, then tag — and three releases in a row
-# failed because the tag came first. Deriving it from the tag is what
-# the Python SDK does, and there is one source of truth either way.
-#
-# The commit lands after the tag, so the tag itself still carries the
-# previous LAST_VERSION. Composer reads the version from the tag, never
-# from that file, so the file is a record of the last release rather
-# than of the tagged tree.
-
 on:
   workflow_dispatch:
     inputs:
@@ -24,71 +10,50 @@ on:
       registry:
         description: packagist
         required: true
-        type: string
+        type: choice
+        options: [packagist]
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  update-version:
-    name: Write LAST_VERSION from the tag
+  release-tag:
+    name: Check the release tag
     runs-on: ubuntu-latest
     steps:
-      - name: 📥 Checkout the default branch
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.repository.default_branch }}
-          fetch-depth: 0
-
-      - name: 🔍 Extract version from tag
-        id: version
+      - name: 🔍 Semver tag
         run: |
-          TAG="v${{ inputs.version }}"
-
-          if ! printf '%s' "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
-            echo "::error::Packagist needs a semver tag prefixed with v, got $TAG."
+          if ! printf '%s' "v${{ inputs.version }}" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::Packagist needs a semver tag prefixed with v, got v${{ inputs.version }}."
             exit 1
           fi
 
-          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
-          echo "tag $TAG -> ${TAG#v}"
-
-      - name: 📝 Write LAST_VERSION
-        run: echo "${{ steps.version.outputs.version }}" > LAST_VERSION
-
-      - name: 💾 Commit and push
-        run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          git add LAST_VERSION
-
-          if git diff --staged --quiet; then
-            echo "LAST_VERSION already says this version"
-            exit 0
-          fi
-
-          git commit -m "📦 PKG: Update version to ${{ steps.version.outputs.version }}"
-          git push origin HEAD:${{ github.event.repository.default_branch }}
+      - name: 📥 Checkout the release tag
+        uses: actions/checkout@v4
+        with:
+          ref: refs/tags/v${{ inputs.version }}
 
   test:
     name: Run Tests
+    needs: [release-tag]
     uses: ./.github/workflows/test.yml
     secrets: inherit
 
   code-quality:
     name: Code Quality Checks
+    needs: [release-tag]
     uses: ./.github/workflows/code-quality.yml
     secrets: inherit
 
   integration:
     name: Issue a real document
-    needs: [update-version, test, code-quality]
+    needs: [test, code-quality]
     uses: ./.github/workflows/integration.yml
     secrets: inherit
 
   notify-packagist:
     name: Notify Packagist
-    needs: [update-version, test, code-quality, integration]
+    needs: [test, code-quality, integration]
     runs-on: ubuntu-latest
     steps:
       - name: 📦 Trigger Packagist update
