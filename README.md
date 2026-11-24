@@ -449,6 +449,9 @@ or the string).
 - On `issue()` and `validate()`: `recipientMunicipalRegistration` (up to 15 letters or
   digits, masks dropped), `foreignIdMissingReason` (1 or 2) and, on `Address`, `complement`
   and, for a tomador abroad, `countryIso2`, `postalCode` and `province`.
+- On `Address`, NF-e only: `stateRegistration`, the recipient's IE (2 to 14 digits, or
+  `ISENTO`; spaces, dots, dashes and slashes are dropped). Left out, the recipient is a
+  non-contributor; a number marks a contributor and `ISENTO` an exempt one.
 - `nfse:` a `NfseDetails` with `approximateTaxes`, `competenceDate`, `serviceCityCode` or
   `serviceCountryCode`, `iss`, `federal`, `deductions`, `substitution`, `construction`,
   `event`, `references`, `intermediary` and `foreignTrade`. A `PersonAddress` is the address
@@ -720,8 +723,10 @@ $clients->reactivate($acme['id']);
 
 `Webhooks` registers where the company's events are delivered: `invoice.authorized`,
 `invoice.rejected`, `invoice.cancelled`, `invoice.corrected`, and for documents
-issued against the company `received_invoice.stored` and `received_invoice.full_document`
-(`Webhooks::EVENTS`).
+issued against the company `received_invoice.stored` and `received_invoice.full_document`,
+and the panel actions `integration.settings_changed`, `integration.order_retry`,
+`integration.order_issue` and `integration.catalog_sync` (`Webhooks::EVENTS`). The API sends
+the `integration.*` events only to an endpoint that names them.
 An endpoint receives the events of the credential's own environment only.
 
 ```php
