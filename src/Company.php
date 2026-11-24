@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Stackin;
 
+use Stackin\Br\Check;
+use Stackin\Br\Decimals;
 use Stackin\Errors\InvoiceError;
 use stdClass;
 
@@ -36,6 +38,22 @@ final class Company extends Client
         'simples_apuracao_ibs_cbs',
         'state_registration',
         'service_code',
+        'approximate_tax_simples_percent',
+        'approximate_tax_federal_percent',
+        'approximate_tax_state_percent',
+        'approximate_tax_municipal_percent',
+        'iss_rate',
+        'municipal_registration',
+        'special_tax_regime',
+    ];
+
+    /** The percentage settings: lowest value, whether it is excluded, highest. */
+    private const PERCENT_SETTINGS = [
+        'approximate_tax_simples_percent' => [0.0, false, 99.99],
+        'approximate_tax_federal_percent' => [0.0, false, 100.0],
+        'approximate_tax_state_percent' => [0.0, false, 100.0],
+        'approximate_tax_municipal_percent' => [0.0, false, 100.0],
+        'iss_rate' => [0.0, true, 5.0],
     ];
 
     /** The fiscal fields with a fixed enumeration, and its values. */
@@ -44,6 +62,7 @@ final class Company extends Client
         'simples_nacional' => ['1', '2', '3'],
         'simples_apuracao' => ['1', '2', '3'],
         'simples_apuracao_ibs_cbs' => ['1', '3'],
+        'special_tax_regime' => ['0', '1', '2', '3', '4', '5', '6', '9'],
     ];
 
     /**
@@ -55,10 +74,16 @@ final class Company extends Client
      * (derived from the code when left out) and zip_code (8 digits, a mask
      * accepted). $fiscalFields takes tax_regime (CRT 1-4), simples_nacional
      * (1-3), simples_apuracao (1-3), simples_apuracao_ibs_cbs (1 or 3),
-     * state_registration and service_code;
-     * anyone but the owner is refused with an ApiError 403. Any other key is
-     * refused here, before the call. Null values are left out, and a call
-     * with nothing changes nothing and answers the company as it is.
+     * state_registration and service_code, and for the NFS-e
+     * approximate_tax_simples_percent (0 to 99.99), approximate_tax_federal_percent,
+     * approximate_tax_state_percent and approximate_tax_municipal_percent (0 to
+     * 100), iss_rate (above 0, at most 5; two decimals, a comma accepted),
+     * municipal_registration (up to 15 letters or digits) and
+     * special_tax_regime (0, 1, 2, 3, 4, 5, 6 or 9). Those seven are cleared
+     * by an empty string; null leaves them alone. Anyone but the owner is
+     * refused with an ApiError 403. Any other key is refused here, before the
+     * call. Null values are left out, and a call with nothing changes nothing
+     * and answers the company as it is.
      *
      * $blockActivityMismatch (owner only) true makes the API refuse an
      * issuance with MEI_ACTIVITY_NOT_ALLOWED or ACTIVITY_NOT_REGISTERED as a
@@ -102,8 +127,13 @@ final class Company extends Client
 
         $fiscal = self::group('fiscal_fields', $fiscalFields, self::FISCAL_KEYS);
         if ($fiscal !== []) {
+            $fiscal = self::nfseSettings($fiscal);
             foreach (self::FISCAL_CODES as $key => $allowed) {
-                if (isset($fiscal[$key]) && !in_array($fiscal[$key], $allowed, true)) {
+                if (
+                    isset($fiscal[$key])
+                    && ($fiscal[$key] !== '' || $key !== 'special_tax_regime')
+                    && !in_array($fiscal[$key], $allowed, true)
+                ) {
                     throw new InvoiceError(
                         "{$key} must be one of " . implode(', ', $allowed),
                     );
@@ -119,6 +149,44 @@ final class Company extends Client
             json: $payload === [] ? new stdClass() : $payload,
             company: $company,
         );
+    }
+
+    /**
+     * @param array<string, string> $fiscal
+     * @return array<string, string>
+     */
+    private static function nfseSettings(array $fiscal): array
+    {
+        foreach (self::PERCENT_SETTINGS as $key => [$low, $open, $high]) {
+            if (!isset($fiscal[$key])) {
+                continue;
+            }
+            $text = str_replace(',', '.', trim($fiscal[$key]));
+            if ($text === '') {
+                $fiscal[$key] = '';
+                continue;
+            }
+            $number = Decimals::format($text, $key, 2);
+            $value = (float) $number;
+            if ($value < $low || ($open && $value <= $low) || $value > $high) {
+                throw new InvoiceError(
+                    "{$key} must be a percentage " . ($open ? 'above ' : 'from ') . $low
+                    . ' and at most ' . $high . ' with at most two decimals',
+                );
+            }
+            $fiscal[$key] = $number;
+        }
+        if (isset($fiscal['municipal_registration'])) {
+            $registration = (string) Check::unmask($fiscal['municipal_registration']);
+            if ($registration !== '' && preg_match('/^[A-Za-z0-9]{1,15}$/', $registration) !== 1) {
+                throw new InvoiceError(
+                    'municipal_registration takes up to 15 letters or digits',
+                );
+            }
+            $fiscal['municipal_registration'] = $registration;
+        }
+
+        return $fiscal;
     }
 
     /**
