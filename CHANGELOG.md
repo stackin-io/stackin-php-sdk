@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.28.0 — 2026-11-24
+
+### Features
+- **address:** stateRegistration for the recipient IE #56
+- **webhooks:** list the integration.* events #55
+
+### Docs
+- **readme:** stateRegistration and the integration events #55 #56
+
 ## v0.27.0 — 2026-11-24
 
 ### Features
