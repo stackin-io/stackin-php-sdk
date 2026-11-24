@@ -81,6 +81,53 @@ final class AddressTest extends TestCase
         new Address(...[$field => $value]);
     }
 
+    public function testStateRegistrationIsOmittedWhenAbsent(): void
+    {
+        $address = new Address(state: 'SP');
+
+        $this->assertNull($address->stateRegistration);
+        $this->assertArrayNotHasKey('state_registration', $address->toArray());
+    }
+
+    public function testStateRegistrationIsentoIsAccepted(): void
+    {
+        $address = new Address(state: 'SP', stateRegistration: 'isento');
+
+        $this->assertSame('ISENTO', $address->stateRegistration);
+        $this->assertSame('ISENTO', $address->toArray()['state_registration']);
+    }
+
+    public function testStateRegistrationDropsTheMask(): void
+    {
+        $address = new Address(state: 'SP', stateRegistration: '110.042.490.114');
+
+        $this->assertSame('110042490114', $address->stateRegistration);
+        $this->assertSame('110042490114', $address->toArray()['state_registration']);
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function badStateRegistration(): array
+    {
+        return [
+            'one digit' => ['1'],
+            'fifteen digits' => ['123456789012345'],
+            'letters' => ['ABC123'],
+            'blank' => ['   '],
+            'isento with a suffix' => ['ISENTO1'],
+        ];
+    }
+
+    #[DataProvider('badStateRegistration')]
+    public function testRejectsAnInvalidStateRegistration(string $value): void
+    {
+        $this->expectException(InvoiceError::class);
+        $this->expectExceptionMessage('stateRegistration takes 2 to 14 digits, or ISENTO');
+
+        new Address(stateRegistration: $value);
+    }
+
     public function testCountryFieldsToArray(): void
     {
         $address = new Address(state: 'EX', countryCode: '2496', countryName: 'Estados Unidos');
