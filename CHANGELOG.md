@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.26.0 — 2026-11-24
+
+### Features
+- **company:** blockActivityMismatch on update() #58
+- **items:** nbs on NFS-e lines and catalog items #58
+- **invoice:** warnings on issue() and acceptLanguage on issue() and validate() #58
+
+### Bug Fixes
+- **invoice:** treat an empty acceptLanguage as unset #58
+
+### Tests
+- nbs, warnings, acceptLanguage and blockActivityMismatch #58
+
 ## v0.25.0 — 2026-11-23
 
 ### Features
