@@ -174,6 +174,18 @@ Anywhere else a `null` `taxId` throws an `InvoiceError` locally. The SDK checks 
 $invoice->issue(DocumentType::NFE, /* ... */, contingency: true);
 ```
 
+With `contingency: true` it also takes `contingencyStartedAt` (a `DateTimeInterface`, sent as RFC 3339 with its offset and written as `dhCont`; defaults to the emission moment, and may not be later than it) and `contingencyReason` (15 to 256 characters, written as `xJust`; the API has a default reason). Both are left out of the request when `null`, and the API refuses either one without `contingency: true`:
+
+```php
+$invoice->issue(
+    DocumentType::NFE,
+    /* ... */
+    contingency: true,
+    contingencyStartedAt: new DateTimeImmutable('2026-11-25 09:00:00', new DateTimeZone('-03:00')),
+    contingencyReason: 'SEFAZ authorizer unavailable since 09:00',
+);
+```
+
 A fuel sold under a fuel CFOP needs the layout's `comb` group, as a `Fuel` on the item. It goes on the wire under `br.fuel`; passing a `comb` through `extraGroups` as well throws an `InvoiceError`.
 
 ```php
@@ -425,7 +437,12 @@ Catalog items take `nbs` too (`$items->upsert(..., nbs: '115021000')`).
 form `serviceCode` takes (`1.07`, `01.07.00`, `010700`). It answers an `NbsSuggestions`
 with `serviceCode`, `suggestions` (each an `NbsSuggestion`: `nbs`, `description`,
 `operationIndicator` (cIndOp), `ibsCbsClassification` (cClassTrib) and
-`classificationName`, null where the annex lists none) and `source`. They are suggestions
+`classificationName`, null where the annex lists none; and, when the official cClassTrib
+table has them, `classificationCst` (for `ibsCbs` `cst`), `reductionIbs` and `reductionCbs`
+(percent reductions, as `float`), `legalReference` (the LC 214/2025 article), `incidence`
+(where Anexo VIII says the IBS is due) and `operationVariants`, the cIndOp for the same
+operation when it is not onerous or the acquirer is abroad, keyed `onerous_domestic`,
+`onerous_abroad`, `free_domestic` and `free_abroad`) and `source`. They are suggestions
 only: nothing is written into a document unless you send them as the line's `nbs` and its
 `ibsCbs`. A code the route cannot read is an `ApiError` 422.
 
@@ -433,6 +450,8 @@ only: nothing is written into a document unless you send them as the line's `nbs
 $found = (new FiscalReference(apiKey: getenv('STACKIN_API_KEY')))->nbsSuggestions('1.07');
 foreach ($found->suggestions as $row) {
     echo $row->nbs, ' ', $row->operationIndicator, ' ', $row->ibsCbsClassification, "\n";
+    echo $row->classificationCst, ' ', $row->reductionIbs, ' ', $row->legalReference, "\n";
+    echo $row->operationVariants['free_abroad'] ?? '', "\n";
 }
 ```
 
@@ -511,6 +530,11 @@ confirm it, and only then put it on an item. `missing_information` lists what
 would settle it; answer through `answers` and ask again. `description` is 3 to
 500 characters, checked locally.
 
+`answers` takes `origin` (`'resale'` or `'own_production'`) to settle an NF-e's CFOP: a
+resold product is `x102`, the company's own production `x101`. When the description does
+not say which, `missing_information` asks for it. `classify()` takes `acceptLanguage`
+(`pt-BR`, `en` or `es`), sent as the `Accept-Language` header only.
+
 ### Dry run, and an NFS-e whose outcome is unknown
 
 `validate()` takes the arguments of `issue()` (no idempotency key, `acceptLanguage` included) and runs the API's
@@ -549,6 +573,17 @@ The first 50 received documents a month are included in every plan; after that
 R$ 0,05 each is taken from the account credit. Some existing accounts are exempt,
 and `usage()->receivedFree` says whether yours is.
 
+Besides `data`, the page carries a `sync` key that says how fresh the list is:
+
+| Key | Meaning |
+|---|---|
+| `status` | `ok` (the last read worked), `cooling_down` (the SEFAZ asked for a wait), `failing` (reads keep failing) or `never` (nothing read yet: no certificate, or the first sweep is pending) |
+| `next_sync_at` | no read is allowed before this instant (UTC) |
+| `competing_reader` | `true` when the SEFAZ blocks the reads because another system reads the same CNPJ with the same certificate |
+| `hint` | the usual cause and what to do, in the language of `acceptLanguage` (`pt-BR`, `en` or `es`) |
+
+`received()` takes `acceptLanguage` for the `hint`; `last_synced_at`, `failing_since`, `error_code`, `error_message` and `gaps_pending` come in the same array.
+
 ```php
 use Stackin\Errors\RateLimitedError;
 use Stackin\Manifestation;
@@ -560,8 +595,9 @@ try {
     echo $wait->retryAt?->format(DATE_ATOM);
 }
 
-$page = $client->received(limit: 20);
+$page = $client->received(limit: 20, acceptLanguage: 'en');
 echo $page['total'];
+echo $page['sync']['status'], ' ', $page['sync']['hint'] ?? '';
 
 $client->manifest($accessKey, Manifestation::CIENCIA);
 $client->manifest(
