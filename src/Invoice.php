@@ -220,6 +220,8 @@ final class Invoice extends Client
         ?string $recipientMunicipalRegistration = null,
         ?int $foreignIdMissingReason = null,
         ?NfseDetails $nfse = null,
+        ?DateTimeInterface $contingencyStartedAt = null,
+        ?string $contingencyReason = null,
     ): array {
         $registration = Check::pattern(
             Check::unmask($recipientMunicipalRegistration),
@@ -315,6 +317,8 @@ final class Invoice extends Client
             'export' => $export?->toArray(),
             'update_client' => $updateClient ? true : null,
             'contingency' => $contingency ? true : null,
+            'contingency_started_at' => $contingencyStartedAt?->format(DateTimeInterface::RFC3339),
+            'contingency_reason' => $contingencyReason,
             'client_email' => $clientEmail,
             'client_phone' => $clientPhone,
             'presence' => $presence,
@@ -398,7 +402,11 @@ final class Invoice extends Client
      *
      * $contingency true sends an NF-e through the UF's contingency
      * authorizer (SVC-AN/SVC-RS, tpEmis 6/7) for when its own is down.
-     * Left false, it is not sent.
+     * Left false, it is not sent. With it, $contingencyStartedAt (when the
+     * issuer entered contingency, dhCont; defaults to the emission moment
+     * and may not be later than it) and $contingencyReason (xJust, 15 to
+     * 256 characters; the API has a default) are left out of the request
+     * when null; the API refuses either one without $contingency.
      *
      * NF-e only, each left out of the request when null: $presence says how
      * the buyer took part ("0" not applicable, "1" in person, "2" internet,
@@ -456,6 +464,8 @@ final class Invoice extends Client
         ?string $recipientMunicipalRegistration = null,
         ?int $foreignIdMissingReason = null,
         ?NfseDetails $nfse = null,
+        ?DateTimeInterface $contingencyStartedAt = null,
+        ?string $contingencyReason = null,
     ): array {
         $payload = self::issuePayload(
             $documentType,
@@ -486,6 +496,8 @@ final class Invoice extends Client
             $recipientMunicipalRegistration,
             $foreignIdMissingReason,
             $nfse,
+            $contingencyStartedAt,
+            $contingencyReason,
         );
 
         $body = $this->send(
@@ -556,6 +568,8 @@ final class Invoice extends Client
         ?string $recipientMunicipalRegistration = null,
         ?int $foreignIdMissingReason = null,
         ?NfseDetails $nfse = null,
+        ?DateTimeInterface $contingencyStartedAt = null,
+        ?string $contingencyReason = null,
     ): ValidationResult {
         $payload = self::issuePayload(
             $documentType,
@@ -586,6 +600,8 @@ final class Invoice extends Client
             $recipientMunicipalRegistration,
             $foreignIdMissingReason,
             $nfse,
+            $contingencyStartedAt,
+            $contingencyReason,
         );
 
         try {
@@ -794,12 +810,18 @@ final class Invoice extends Client
      * the account credit; usage()->receivedFree says whether this
      * account is exempt.
      *
+     * The page carries a sync key: status (ok, cooling_down, failing or
+     * never), next_sync_at, competing_reader and a hint, which
+     * $acceptLanguage (pt-BR, en or es) localizes. It is sent as the
+     * Accept-Language header only.
+     *
      * @return array<string, mixed>
      */
     public function received(
         ?int $limit = null,
         ?int $offset = null,
         ?string $company = null,
+        ?string $acceptLanguage = null,
     ): array {
         $query = [];
         if ($limit !== null) {
@@ -809,7 +831,13 @@ final class Invoice extends Client
             $query['offset'] = (string) $offset;
         }
 
-        return $this->request('GET', '/received-invoices', query: $query, company: $company);
+        return $this->request(
+            'GET',
+            '/received-invoices',
+            query: $query,
+            company: $company,
+            acceptLanguage: $acceptLanguage,
+        );
     }
 
     /**
@@ -955,6 +983,11 @@ final class Invoice extends Client
      * (pass those back in $answers). Someone confirms it before it goes
      * on an item; the codes decide the tax owed.
      *
+     * $answers takes origin ("resale" or "own_production") to settle an
+     * NF-e's CFOP: x102 for a resold product, x101 for the company's own
+     * production. $acceptLanguage (pt-BR, en or es) is sent as the
+     * Accept-Language header only.
+     *
      * @param array<string, mixed> $answers
      * @return array<string, mixed>
      */
@@ -964,6 +997,7 @@ final class Invoice extends Client
         ?string $recipientState = null,
         array $answers = [],
         ?string $company = null,
+        ?string $acceptLanguage = null,
     ): array {
         $length = mb_strlen($description);
         if ($length < 3 || $length > 500) {
@@ -984,7 +1018,13 @@ final class Invoice extends Client
             $payload['answers'] = $answers;
         }
 
-        return $this->request('POST', '/ai/classify', json: $payload, company: $company);
+        return $this->request(
+            'POST',
+            '/ai/classify',
+            json: $payload,
+            company: $company,
+            acceptLanguage: $acceptLanguage,
+        );
     }
 
     /**
