@@ -1,5 +1,20 @@
 # Changelog
 
+## v0.30.0 — 2026-11-25
+
+### Features
+- NBS reduction fields, contingency moment and reason, Accept-Language on classify and received (#67)
+
+### Docs
+- received sync object, classify origin answer and the new NBS fields (#67)
+
+### CI
+- **publish:** build and publish the release tag, commit nothing back (#64)
+- **publish:** publish when Action Platform deploys a release (#64)
+
+### Chores
+- **platform:** declare scopes and the deploy targets the platform observes
+
 ## v0.28.0 — 2026-11-24
 
 ### Features
